@@ -12,12 +12,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import type { PvArray, RoofPlane as RoofPlaneModel } from '../types'
 import { catalog } from '../catalog'
 import { useStore } from '../store'
-import { planeSurface } from './RoofPlane'
-
-/** Gap between adjacent module frames, metres. */
-const MODULE_GAP_M = 0.02
-/** How far the module sits above the roof surface, metres. */
-const STANDOFF_M = 0.12
+import { roofModuleFrames } from '../engine/siteGeometry'
 
 export interface ModuleArrayProps {
   array: PvArray
@@ -35,56 +30,33 @@ export function ModuleArray({ array, plane }: ModuleArrayProps) {
   const selectArray = useStore((s) => s.selectArray)
   const toggleModule = useStore((s) => s.toggleModule)
 
+  const shading = useStore((s) => s.shading)
+
   const module = catalog.modules.find((m) => m.id === array.module_id)
   const selected = selectedArrayId === array.id
+
+  /** Per-module annual loss, keyed the same way siteGeometry builds surface ids. */
+  const lossById = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of shading?.per_surface ?? []) m.set(p.id, p.loss_pct)
+    return m
+  }, [shading])
 
   const { cells, width, height } = useMemo(() => {
     if (!module) return { cells: [] as Cell[], width: 0, height: 0 }
 
-    // Portrait puts the module's long edge up the slope.
-    const long = module.length_mm / 1000
-    const short = module.width_mm / 1000
-    const w = array.layout === 'portrait' ? short : long
-    const h = array.layout === 'portrait' ? long : short
+    // Shared with the shading calculation, so the render and the measured
+    // loss can never disagree about where the modules are.
+    const frames = roofModuleFrames(array, plane, module)
+    if (frames.length === 0) return { cells: [] as Cell[], width: 0, height: 0 }
 
-    const surface = planeSurface({
-      ...plane,
-      tilt_deg: array.tilt_deg ?? plane.tilt_deg,
-      azimuth_deg: array.azimuth_deg ?? plane.azimuth_deg,
-    })
-    const { right, upSlope, normal } = surface.frame
+    const out: Cell[] = frames.map((f) => ({
+      row: f.row,
+      col: f.col,
+      matrix: f.basis.clone().setPosition(f.position),
+    }))
 
-    const pitchX = w + MODULE_GAP_M
-    const pitchY = h + MODULE_GAP_M
-
-    // Centre the block of modules on the plane's centroid.
-    const offsetX = ((array.cols - 1) * pitchX) / 2
-    const offsetY = ((array.rows - 1) * pitchY) / 2
-
-    const basis = new THREE.Matrix4().makeBasis(right, upSlope, normal)
-    const out: Cell[] = []
-
-    for (const pos of array.module_positions) {
-      if (!pos.enabled) continue
-
-      // Row 0 is the lowest row on the slope.
-      const acrossDelta = pos.col * pitchX - offsetX
-      const upDelta = pos.row * pitchY - offsetY
-
-      const p = surface.centroid
-        .clone()
-        .addScaledVector(right, acrossDelta)
-        .addScaledVector(upSlope, upDelta)
-        .addScaledVector(normal, STANDOFF_M)
-
-      out.push({
-        row: pos.row,
-        col: pos.col,
-        matrix: basis.clone().setPosition(p),
-      })
-    }
-
-    return { cells: out, width: w, height: h }
+    return { cells: out, width: frames[0].width_m, height: frames[0].height_m }
   }, [array, plane, module])
 
   const meshRef = useRef<THREE.InstancedMesh>(null)
@@ -95,7 +67,24 @@ export function ModuleArray({ array, plane }: ModuleArrayProps) {
     cells.forEach((c, i) => mesh.setMatrixAt(i, c.matrix))
     mesh.instanceMatrix.needsUpdate = true
     mesh.computeBoundingSphere()
-  }, [cells])
+
+    /*
+      Tint each module by its own measured shading loss, so the picture and the
+      number tell the same story. Unshaded modules keep the normal dark glass;
+      losses ramp through amber to red.
+    */
+    if (!selected) {
+      const c = new THREE.Color()
+      cells.forEach((cell, i) => {
+        const loss = lossById.get(`${array.id}:${cell.row}:${cell.col}`) ?? 0
+        if (loss < 1) c.set('#0a0f1c')
+        else if (loss < 15) c.set('#0a0f1c').lerp(new THREE.Color('#f59e0b'), loss / 15)
+        else c.set('#f59e0b').lerp(new THREE.Color('#e11d48'), Math.min(1, (loss - 15) / 25))
+        mesh.setColorAt(i, c)
+      })
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    }
+  }, [cells, lossById, array.id, selected])
 
   if (!module || cells.length === 0) return null
 
@@ -123,7 +112,7 @@ export function ModuleArray({ array, plane }: ModuleArrayProps) {
       {/* Thin slab: X across slope, Y up slope, Z out of the plane. */}
       <boxGeometry args={[width, height, 0.035]} />
       <meshStandardMaterial
-        color={selected ? '#1e3a8a' : '#0a0f1c'}
+        color={selected ? '#1e3a8a' : '#ffffff'}
         // PV glass reads dark and only faintly glossy in real light. Low
         // roughness here blew out to white under a grazing sun.
         roughness={0.62}

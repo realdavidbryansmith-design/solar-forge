@@ -17,6 +17,7 @@ import type {
   StringConfig,
   SystemType,
 } from './types'
+import type { ShadingResult } from './engine/shading'
 import { catalog } from './catalog'
 
 export type PanelId =
@@ -117,9 +118,12 @@ interface AppState {
   armedTool: SiteObjectKind | null
   /** Site object currently being dragged in the scene. */
   draggingObjectId: string | null
+  /** Latest shading result, published so the 3D view can tint modules. */
+  shading: ShadingResult | null
 
   setArmedTool: (kind: SiteObjectKind | null) => void
   setDraggingObject: (id: string | null) => void
+  setShading: (r: ShadingResult | null) => void
   setPanel: (p: PanelId) => void
   selectArray: (id: string | null) => void
   setSun: (day: number, hour: number) => void
@@ -167,6 +171,9 @@ export const useStore = create<AppState>((set) => ({
   showWiring: false,
   armedTool: null,
   draggingObjectId: null,
+  shading: null,
+
+  setShading: (shading) => set({ shading }),
 
   setArmedTool: (armedTool) => set({ armedTool }),
   setDraggingObject: (draggingObjectId) => set({ draggingObjectId }),

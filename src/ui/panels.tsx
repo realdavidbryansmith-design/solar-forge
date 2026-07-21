@@ -7,6 +7,7 @@
 
 import type { RoofType, SiteObject, SiteObjectKind, SystemType } from '../types'
 import type { Option } from './controls'
+import { ShadingSection } from './ShadingSection'
 import { catalog } from '../catalog'
 import {
   arrayDcWatts,
@@ -401,6 +402,8 @@ export function ArrayPanel() {
           <SelectField label="Roof type" value={plane.roof_type} onChange={(v) => updatePlane(plane.id, { roof_type: v as RoofType })} options={ROOF_TYPES} />
         </Section>
       ))}
+
+      {design.arrays.length > 0 ? <ShadingSection /> : null}
 
       {design.arrays.length === 0 ? (
         <EmptyState title="No arrays yet">

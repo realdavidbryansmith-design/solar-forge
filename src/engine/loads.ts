@@ -261,6 +261,50 @@ export function estimateLoads(items: LoadItem[]): LoadEstimate {
  * meaningful production to cloud, so the sizing function applies a separate
  * weather derate on top. See VERIFICATION.md.
  */
+export interface ClearSkyIrradiance {
+  /** Direct normal irradiance, W/m^2. */
+  dni_wm2: number
+  /** Beam component landing on the tilted plane, W/m^2. */
+  beam_wm2: number
+  /** Isotropic diffuse on the tilted plane, W/m^2. */
+  diffuse_wm2: number
+  /** Total plane-of-array irradiance, W/m^2. */
+  poa_wm2: number
+}
+
+/**
+ * Clear-sky irradiance on a tilted plane for one instant.
+ *
+ * Meinel beam attenuation through air mass, plus an isotropic diffuse term.
+ * Shared by the yield estimate and the shading calculation so the two cannot
+ * disagree about how much light is available.
+ *
+ * Beam and diffuse are returned separately because shading treats them
+ * differently: an obstruction blocks the beam outright, but only reduces the
+ * diffuse component in proportion to the sky it covers.
+ */
+export function clearSkyIrradiance(
+  sun: { altitude_deg: number; azimuth_deg: number; hour_angle_deg: number; declination_deg: number },
+  tilt_deg: number,
+  azimuth_deg: number,
+): ClearSkyIrradiance {
+  if (sun.altitude_deg <= 3) {
+    return { dni_wm2: 0, beam_wm2: 0, diffuse_wm2: 0, poa_wm2: 0 }
+  }
+
+  const am = 1 / Math.sin((sun.altitude_deg * Math.PI) / 180)
+  const dni = 1353 * Math.pow(0.7, Math.pow(am, 0.678))
+
+  const beam = dni * cosIncidence(tilt_deg, azimuth_deg, sun)
+
+  // Isotropic diffuse: roughly 10% of DNI on the horizontal, view-factored
+  // onto the tilted plane.
+  const viewFactor = (1 + Math.cos((tilt_deg * Math.PI) / 180)) / 2
+  const diffuse = 0.1 * dni * Math.sin((sun.altitude_deg * Math.PI) / 180) * viewFactor
+
+  return { dni_wm2: dni, beam_wm2: beam, diffuse_wm2: diffuse, poa_wm2: beam + diffuse }
+}
+
 export function dailyInsolationKwhM2(
   latitude_deg: number,
   tilt_deg: number,
@@ -272,20 +316,7 @@ export function dailyInsolationKwhM2(
 
   for (let hour = 0; hour < 24; hour += STEP_H) {
     const sun = sunPositionSolarTime(latitude_deg, dayOfYear, hour)
-    if (sun.altitude_deg <= 3) continue
-
-    // Air mass, and beam normal irradiance through it.
-    const am = 1 / Math.sin((sun.altitude_deg * Math.PI) / 180)
-    const dni = 1353 * Math.pow(0.7, Math.pow(am, 0.678))
-
-    const beam = dni * cosIncidence(tilt_deg, azimuth_deg, sun)
-
-    // Isotropic diffuse: roughly 10% of DNI on the horizontal, view-factored
-    // onto the tilted plane.
-    const viewFactor = (1 + Math.cos((tilt_deg * Math.PI) / 180)) / 2
-    const diffuse = 0.1 * dni * Math.sin((sun.altitude_deg * Math.PI) / 180) * viewFactor
-
-    total += (beam + diffuse) * STEP_H
+    total += clearSkyIrradiance(sun, tilt_deg, azimuth_deg).poa_wm2 * STEP_H
   }
 
   return total / 1000

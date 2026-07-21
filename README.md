@@ -38,13 +38,29 @@ rather than trusting a green tick:
 string/micro/hybrid inverters, batteries, charge controllers, racking and
 trackers, EVSE, and balance-of-system parts.
 
+**Measured shading loss.** Rays are cast from nine points on every module toward
+the sun, twice an hour across twelve representative days, weighted by the light
+available at that moment. Reports annual and monthly loss, attributes it to the
+specific tree or building responsible, and tints each module in the 3D view by
+its own loss so you can see which panels are affected.
+
+**Site context you can lay out.** Drag houses, barns, garages, sheds and trees
+onto the scene from an icon palette (or tap to place on a phone), then drag them
+around. Everything casts real shadows and feeds the shading calculation.
+
 **Bill of materials** with a CSV export.
 
 ## What it deliberately does not do
 
 Silence is not compliance. It performs no structural, wind, snow or ballast
 calculation; no fire setback or access pathway check; no utility interconnection
-review; no arc-flash study. The 705.12 options requiring judgement or a PE stamp
+review; no arc-flash study.
+
+The shading figure is **geometric only**. The electrical consequence is usually
+worse — a shaded cell drags down its whole series string, so a module 20%
+covered can lose considerably more than 20% of its output depending on bypass
+diodes and string layout. Treat it as a lower bound. It also models roof arrays
+only; ground and tracker arrays are not yet sampled. The 705.12 options requiring judgement or a PE stamp
 are named as next steps, never auto-passed. Full list in
 [VERIFICATION.md](VERIFICATION.md).
 
@@ -93,7 +109,11 @@ src/
   nec/
     tables.ts       NEC lookup tables, each with a verification status
     index.ts        the calculation engine; every result carries its citation
-  engine/solar.ts   sun position, row spacing, backtracking, PVWatts v5 yield
+  engine/
+    solar.ts        sun position, row spacing, backtracking, PVWatts v5 yield
+    loads.ts        appliance library, load presets, clear-sky insolation, sizing
+    shading.ts      ray/sphere and ray/box occlusion, annual shading loss
+    siteGeometry.ts bridges the design into the shading engine
   render3d/         Three.js scene (roof geometry, module instancing, sun)
   ui/               mobile-first panels
 ```
@@ -112,6 +132,8 @@ export is the sensible bridge back into CAD and is the natural next feature.
 - DXF export and a generated single-line diagram
 - PDF permit package
 - PVWatts / NSRDB integration for real weather-driven yield
+- Electrical (string-level) shading loss, not just geometric
+- Shading for ground-mount and tracker arrays
 - Automatic string configuration and inter-row spacing for ground mounts
 - Conduit fill per Chapter 9
 
