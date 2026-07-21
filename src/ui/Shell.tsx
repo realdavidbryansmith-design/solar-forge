@@ -1,0 +1,118 @@
+/**
+ * App shell.
+ *
+ * Phone: 3D view on top, scrollable panel beneath, tab bar pinned to the
+ * bottom inside the safe area.
+ * Tablet and up: fixed side panel on the left, 3D fills the rest.
+ *
+ * The page itself never scrolls horizontally — every wide element scrolls
+ * inside its own container.
+ */
+
+import type { PanelId } from '../store'
+import { useStore } from '../store'
+import { Scene } from '../render3d'
+import { ArrayPanel, ElectricalPanel, EvPanel, SitePanel, StoragePanel } from './panels'
+import { CompliancePanel } from './CompliancePanel'
+import { BomPanel } from './BomPanel'
+
+interface Tab {
+  id: PanelId
+  label: string
+  icon: string
+}
+
+const TABS: Tab[] = [
+  { id: 'site', label: 'Site', icon: '📍' },
+  { id: 'array', label: 'Array', icon: '▦' },
+  { id: 'electrical', label: 'Electrical', icon: '⚡' },
+  { id: 'storage', label: 'Storage', icon: '🔋' },
+  { id: 'ev', label: 'EV', icon: '🚗' },
+  { id: 'compliance', label: 'Code', icon: '§' },
+  { id: 'bom', label: 'BOM', icon: '📋' },
+]
+
+function ActivePanel({ id }: { id: PanelId }) {
+  switch (id) {
+    case 'site':
+      return <SitePanel />
+    case 'array':
+      return <ArrayPanel />
+    case 'electrical':
+      return <ElectricalPanel />
+    case 'storage':
+      return <StoragePanel />
+    case 'ev':
+      return <EvPanel />
+    case 'compliance':
+      return <CompliancePanel />
+    case 'bom':
+      return <BomPanel />
+  }
+}
+
+export function Shell() {
+  const activePanel = useStore((s) => s.activePanel)
+  const setPanel = useStore((s) => s.setPanel)
+  const designName = useStore((s) => s.design.name)
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden md:flex-row">
+      {/* ---- Side panel (desktop) / bottom sheet (mobile) ---- */}
+      <aside className="order-2 flex min-h-0 min-w-0 flex-1 flex-col border-ink-700 md:order-1 md:w-[380px] md:flex-none md:border-r">
+        <header className="safe-top hidden shrink-0 items-baseline gap-2 border-b border-ink-700 px-4 py-3 md:flex">
+          <span className="text-sm font-bold tracking-wide text-slate-100">SolarForge</span>
+          <span className="min-w-0 truncate text-xs text-slate-500">{designName}</span>
+        </header>
+
+        {/* Desktop tab rail */}
+        <nav className="hidden shrink-0 gap-1 overflow-x-auto border-b border-ink-700 px-2 py-2 md:flex">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setPanel(t.id)}
+              className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+                activePanel === t.id
+                  ? 'bg-brand-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <ActivePanel id={activePanel} />
+        </div>
+      </aside>
+
+      {/* ---- 3D view ---- */}
+      <main className="order-1 h-[45vh] w-full shrink-0 md:order-2 md:h-full md:min-w-0 md:flex-1">
+        <Scene />
+      </main>
+
+      {/* ---- Mobile tab bar ---- */}
+      <nav className="safe-bottom order-3 shrink-0 border-t border-ink-700 bg-ink-900 md:hidden">
+        <div className="flex overflow-x-auto">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setPanel(t.id)}
+              className={`flex min-w-[62px] flex-1 flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium ${
+                activePanel === t.id ? 'text-brand-400' : 'text-slate-500'
+              }`}
+            >
+              <span aria-hidden className="text-base leading-none">
+                {t.icon}
+              </span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+  )
+}
