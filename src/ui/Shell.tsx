@@ -19,14 +19,16 @@ import { BomPanel } from './BomPanel'
 interface Tab {
   id: PanelId
   label: string
+  /** Narrow form for the phone tab bar, where seven cells share 375px. */
+  short?: string
   icon: string
 }
 
 const TABS: Tab[] = [
   { id: 'site', label: 'Site', icon: '📍' },
   { id: 'array', label: 'Array', icon: '▦' },
-  { id: 'electrical', label: 'Electrical', icon: '⚡' },
-  { id: 'storage', label: 'Storage', icon: '🔋' },
+  { id: 'electrical', label: 'Electrical', short: 'Elec', icon: '⚡' },
+  { id: 'storage', label: 'Storage', short: 'Batt', icon: '🔋' },
   { id: 'ev', label: 'EV', icon: '🚗' },
   { id: 'compliance', label: 'Code', icon: '§' },
   { id: 'bom', label: 'BOM', icon: '📋' },
@@ -65,14 +67,18 @@ export function Shell() {
           <span className="min-w-0 truncate text-xs text-slate-500">{designName}</span>
         </header>
 
-        {/* Desktop tab rail */}
-        <nav className="hidden shrink-0 gap-1 overflow-x-auto border-b border-ink-700 px-2 py-2 md:flex">
+        {/*
+          Desktop tab rail. Wraps rather than scrolls: the panel is a fixed
+          380px and seven labels do not fit on one line, so scrolling would
+          silently hide the last tab off the right edge.
+        */}
+        <nav className="hidden shrink-0 flex-wrap gap-0.5 border-b border-ink-700 px-1.5 py-2 md:flex">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setPanel(t.id)}
-              className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${
+              className={`shrink-0 rounded-md px-2 py-1 text-xs font-medium ${
                 activePanel === t.id
                   ? 'bg-brand-600 text-white'
                   : 'text-slate-400 hover:text-slate-200'
@@ -93,22 +99,26 @@ export function Shell() {
         <Scene />
       </main>
 
-      {/* ---- Mobile tab bar ---- */}
+      {/*
+        Mobile tab bar. All seven tabs must fit a 375px screen without
+        scrolling, so each cell is allowed to shrink below its content width
+        and the label truncates rather than pushing the last tab off-screen.
+      */}
       <nav className="safe-bottom order-3 shrink-0 border-t border-ink-700 bg-ink-900 md:hidden">
-        <div className="flex overflow-x-auto">
+        <div className="flex">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setPanel(t.id)}
-              className={`flex min-w-[62px] flex-1 flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium ${
+              className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-2 text-[10px] font-medium ${
                 activePanel === t.id ? 'text-brand-400' : 'text-slate-500'
               }`}
             >
               <span aria-hidden className="text-base leading-none">
                 {t.icon}
               </span>
-              <span>{t.label}</span>
+              <span className="w-full truncate text-center">{t.short ?? t.label}</span>
             </button>
           ))}
         </div>
