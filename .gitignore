@@ -6,3 +6,7 @@ dist-ssr
 .vite
 coverage
 *.log
+
+# CI workflow parked here until the gh token has `workflow` scope.
+# See DEPLOY.md.
+.ci-pending/

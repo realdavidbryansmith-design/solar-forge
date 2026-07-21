@@ -166,8 +166,10 @@ export function CompliancePanel() {
                   `${Math.ceil(moduleCount(firstArray) / inverter.micro_max_units_per_branch)} branch circuit(s).`
                 : 'No per-branch limit on file for this microinverter.',
               values: {
-                units_per_branch: inverter.micro_max_units_per_branch,
-                branch_ocpd_a: inverter.micro_branch_ocpd_a,
+                // These catalog fields are optional, so normalise undefined to
+                // null — CodeCheck.values models "not on file" as null.
+                units_per_branch: inverter.micro_max_units_per_branch ?? null,
+                branch_ocpd_a: inverter.micro_branch_ocpd_a ?? null,
                 modules: moduleCount(firstArray),
               },
             },

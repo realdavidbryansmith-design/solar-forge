@@ -2,9 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- viewport-fit=cover lets the safe-area insets work on notched phones. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>SolarForge — PV System Designer</title>
+    <meta
+      name="description"
+      content="NEC-aware design, sizing and takeoff tool for solar PV, battery storage and EV charging. Runs entirely in your browser."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <!-- Vite rewrites these against `base` at build time; do not hardcode it. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>solar-forge</title>
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SolarForge" />
   </head>
   <body>
     <div id="root"></div>

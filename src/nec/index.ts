@@ -21,7 +21,6 @@ import {
   rooftopTempAdder,
   tempCorrectionFactor,
   type ConductorMaterial,
-  type ConductorSize,
   type TempRating,
 } from './tables'
 
