@@ -66,6 +66,7 @@ export function WizardPanel() {
   const setChargeController = useStore((s) => s.setChargeController)
   const addArray = useStore((s) => s.addArray)
   const loadDesign = useStore((s) => s.loadDesign)
+  const setLoadProfile = useStore((s) => s.setLoadProfile)
 
   const [goal, setGoal] = useState<SystemGoal>('off-grid')
   const [mode, setMode] = useState<LoadMode>('guess')
@@ -134,7 +135,14 @@ export function WizardPanel() {
   */
   const picks = useMemo(() => {
     const module = catalog.modules.find((m) => m.pmax_w >= 400) ?? catalog.modules[0]
-    const moduleQty = Math.max(1, Math.ceil(result.array_w / module.pmax_w))
+    /*
+      Above roughly 62 degrees the worst month has no usable sun, so the array
+      size is Infinity. That is the correct answer — an off-grid system cannot
+      be sized on solar alone there — but it must not become "Infinity modules"
+      in the UI or NaN grid dimensions in the design.
+    */
+    const sizable = Number.isFinite(result.array_w) && result.array_w > 0
+    const moduleQty = sizable ? Math.max(1, Math.ceil(result.array_w / module.pmax_w)) : 0
 
     // Off-grid needs a unit that can form its own grid; a grid-tied-only
     // inverter is useless at a cabin with no utility connection.
@@ -231,7 +239,7 @@ export function WizardPanel() {
           : ['grid-tie']
     setSystemTypes(types)
 
-    if (plane) {
+    if (plane && picks.moduleQty > 0) {
       // Lay the modules out roughly square so they fit a real roof plane.
       const cols = Math.max(1, Math.ceil(Math.sqrt(picks.moduleQty * 1.6)))
       const rows = Math.max(1, Math.ceil(picks.moduleQty / cols))
@@ -250,6 +258,15 @@ export function WizardPanel() {
         azimuth_deg: null,
       })
     }
+
+    // Carry the load figure into the design so the code checks size the
+    // battery bank against the real number rather than a placeholder.
+    setLoadProfile({
+      daily_kwh: load.daily_kwh,
+      peak_w: load.peak_watts,
+      surge_w: load.surge_watts,
+      source: mode === 'guess' ? 'estimated' : mode === 'known' ? 'entered' : 'itemised',
+    })
 
     if (picks.inverter) setInverters([picks.inverter.id])
     if (picks.battery && picks.batteryQty > 0) setBattery(picks.battery.id, picks.batteryQty)
@@ -540,8 +557,10 @@ export function WizardPanel() {
               <p className="mb-1 font-medium text-slate-300">Suggested equipment</p>
               <ul className="space-y-0.5 text-slate-400">
                 <li>
-                  • {picks.moduleQty} × {picks.module.manufacturer} {picks.module.model} (
-                  {picks.module.pmax_w} W)
+                  •{' '}
+                  {picks.moduleQty > 0
+                    ? `${picks.moduleQty} × ${picks.module.manufacturer} ${picks.module.model} (${picks.module.pmax_w} W)`
+                    : 'No array size can meet this load at this latitude.'}
                 </li>
                 <li>
                   •{' '}
@@ -566,13 +585,23 @@ export function WizardPanel() {
               </ul>
             </div>
 
-            <button
-              type="button"
-              onClick={apply}
-              className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white"
-            >
-              Build this design
-            </button>
+            {picks.moduleQty > 0 ? (
+              <button
+                type="button"
+                onClick={apply}
+                className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Build this design
+              </button>
+            ) : (
+              <p className="rounded border-l-2 border-rose-500/60 bg-rose-500/5 px-2 py-1 text-xs leading-relaxed text-rose-200/90">
+                No array size can meet this load. At{' '}
+                {design.site.latitude_deg.toFixed(1)}° the worst month has effectively
+                no usable sun, so an off-grid system cannot be carried on solar alone —
+                it needs a generator, wind, or a grid connection. Try the annual-average
+                sizing by choosing a grid-connected goal, or check the latitude.
+              </p>
+            )}
 
             {applied ? (
               <div className="rounded border border-emerald-700/50 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">

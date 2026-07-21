@@ -8,7 +8,9 @@
 
 import { create } from 'zustand'
 import type {
+  CircuitConfig,
   Design,
+  LoadProfile,
   PvArray,
   RoofPlane,
   SiteConditions,
@@ -93,6 +95,15 @@ function defaultDesign(): Design {
     system_type: ['grid-tie'],
     // A default house and a couple of trees, so a new design has something to
     // site against rather than a bare field.
+    // Null until the designer states the wiring — never inferred from the grid.
+    circuit: {
+      modules_per_string: null,
+      strings_in_parallel: null,
+      dc_run_ft: null,
+      conductors_in_raceway: null,
+      termination_rating_c: 75,
+    },
+    load_profile: null,
     site_objects: [
       // Walls only (pitch 0) and sized to the roof plane's footprint and eave
       // height: the design's own RoofPlane provides the roof, so a gable here
@@ -148,6 +159,8 @@ interface AppState {
   setBattery: (id: string | null, qty: number) => void
   setChargeController: (id: string | null, qty: number) => void
   setEvse: (ids: string[]) => void
+  updateCircuit: (patch: Partial<CircuitConfig>) => void
+  setLoadProfile: (p: LoadProfile | null) => void
 
   addSiteObject: (obj: SiteObject) => void
   updateSiteObject: (id: string, patch: Partial<SiteObject>) => void
@@ -185,7 +198,18 @@ export const useStore = create<AppState>((set) => ({
   toggleWiring: () => set((s) => ({ showWiring: !s.showWiring })),
 
   updateSite: (patch) =>
-    set((s) => ({ design: touch({ ...s.design, site: { ...s.design.site, ...patch } }) })),
+    set((s) => {
+      // `min`/`max` on a number input are advisory only — the browser will
+      // happily hand back 999. Clamp here so no downstream trig sees it.
+      const next = { ...s.design.site, ...patch }
+      if (typeof next.latitude_deg === 'number') {
+        next.latitude_deg = Math.max(-89.9, Math.min(89.9, next.latitude_deg))
+      }
+      if (typeof next.longitude_deg === 'number') {
+        next.longitude_deg = Math.max(-180, Math.min(180, next.longitude_deg))
+      }
+      return { design: touch({ ...s.design, site: next }) }
+    }),
 
   updateService: (patch) =>
     set((s) => ({
@@ -270,6 +294,14 @@ export const useStore = create<AppState>((set) => ({
     })),
 
   setEvse: (evse_ids) => set((s) => ({ design: touch({ ...s.design, evse_ids }) })),
+
+  updateCircuit: (patch) =>
+    set((s) => ({
+      design: touch({ ...s.design, circuit: { ...s.design.circuit, ...patch } }),
+    })),
+
+  setLoadProfile: (load_profile) =>
+    set((s) => ({ design: touch({ ...s.design, load_profile }) })),
 
   addSiteObject: (obj) =>
     set((s) => ({

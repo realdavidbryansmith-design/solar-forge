@@ -29,6 +29,27 @@ const modules = modulesData as unknown as PvModule[]
 const inverters = invertersData as unknown as Inverter[]
 
 /**
+ * Modules that carry the DC figures the NEC engine needs.
+ *
+ * The JSON is cast rather than parsed, so nothing at the type level stops a
+ * null reaching a calculation. AC modules legitimately have no DC data; this
+ * separates them out so callers must handle the difference explicitly rather
+ * than multiplying by null and getting zero.
+ */
+export function hasDcSpecs(m: PvModule): boolean {
+  return (
+    m.isc_a !== null &&
+    m.voc_v !== null &&
+    m.vmp_v !== null &&
+    Number.isFinite(m.isc_a) &&
+    Number.isFinite(m.voc_v)
+  )
+}
+
+/** Modules the DC engine can size. */
+export const dcModules = modules.filter(hasDcSpecs)
+
+/**
  * Inverters whose optimizers hold the string at a fixed voltage.
  *
  * These break the usual NEC 690.7 string-sizing model: because each optimizer

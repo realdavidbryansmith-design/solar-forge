@@ -510,6 +510,8 @@ export function ElectricalPanel() {
   const design = useStore((s) => s.design)
   const setInverters = useStore((s) => s.setInverters)
   const updateService = useStore((s) => s.updateService)
+  const updateCircuit = useStore((s) => s.updateCircuit)
+  const moduleCountTotal = design.arrays.reduce((n, a) => n + moduleCount(a), 0)
 
   const dc = systemDcWatts(design)
   const ac = systemAcWatts(design)
@@ -567,6 +569,75 @@ export function ElectricalPanel() {
             </button>
           )
         })}
+      </Section>
+
+      <Section
+        title="DC circuit"
+        hint="How the array is actually wired. The module grid is a layout, not a circuit — 15 modules can be three strings of five or one string of fifteen, and only one of those is safe on a given controller. Left blank, the code checks report unknown rather than guessing."
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="Modules per string"
+            allowNull
+            min={1}
+            emphasis
+            value={design.circuit.modules_per_string}
+            onChange={(v) => updateCircuit({ modules_per_string: v })}
+            nullPlaceholder="not set"
+          />
+          <NumberField
+            label="Strings in parallel"
+            allowNull
+            min={1}
+            emphasis
+            value={design.circuit.strings_in_parallel}
+            onChange={(v) => updateCircuit({ strings_in_parallel: v })}
+            nullPlaceholder="not set"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <NumberField
+            label="DC run length"
+            unit="ft"
+            allowNull
+            min={1}
+            value={design.circuit.dc_run_ft}
+            onChange={(v) => updateCircuit({ dc_run_ft: v })}
+            hint="One way, for voltage drop"
+          />
+          <NumberField
+            label="Conductors in raceway"
+            allowNull
+            min={2}
+            value={design.circuit.conductors_in_raceway}
+            onChange={(v) => updateCircuit({ conductors_in_raceway: v })}
+            hint="Current-carrying, for the fill derate"
+          />
+        </div>
+        <SelectField
+          label="Termination temperature rating"
+          value={String(design.circuit.termination_rating_c)}
+          onChange={(v) => updateCircuit({ termination_rating_c: Number(v) as 60 | 75 | 90 })}
+          options={[
+            { value: '60', label: '60 °C' },
+            { value: '75', label: '75 °C (typical)' },
+            { value: '90', label: '90 °C' },
+          ]}
+          hint="NEC 110.14(C) — read it off the equipment label."
+        />
+        {moduleCountTotal > 0 && design.circuit.modules_per_string !== null && design.circuit.strings_in_parallel !== null ? (
+          <p
+            className={`rounded border-l-2 px-2 py-1 text-xs ${
+              design.circuit.modules_per_string * design.circuit.strings_in_parallel === moduleCountTotal
+                ? 'border-emerald-600/60 bg-emerald-500/5 text-emerald-200/90'
+                : 'border-amber-500/60 bg-amber-500/5 text-amber-200/90'
+            }`}
+          >
+            {design.circuit.modules_per_string * design.circuit.strings_in_parallel === moduleCountTotal
+              ? `Wiring accounts for all ${moduleCountTotal} modules.`
+              : `${design.circuit.modules_per_string} × ${design.circuit.strings_in_parallel} = ${design.circuit.modules_per_string * design.circuit.strings_in_parallel} modules, but the array has ${moduleCountTotal}.`}
+          </p>
+        ) : null}
       </Section>
 
       <Section

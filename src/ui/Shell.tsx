@@ -17,6 +17,7 @@ import { WizardPanel } from './WizardPanel'
 import { CompliancePanel } from './CompliancePanel'
 import { BomPanel } from './BomPanel'
 import { ObjectPalette } from './ObjectPalette'
+import { ErrorBoundary } from './ErrorBoundary'
 import { DRAG_MIME, screenToGround } from '../render3d/placement'
 import { makeSiteObject } from '../siteObjectPresets'
 import type { SiteObjectKind } from '../types'
@@ -111,7 +112,10 @@ export function Shell() {
         </nav>
 
         <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <ActivePanel id={activePanel} />
+          {/* Keyed so switching tabs clears a crash from the previous panel. */}
+          <ErrorBoundary key={activePanel} area="This panel">
+            <ActivePanel id={activePanel} />
+          </ErrorBoundary>
         </div>
       </aside>
 
@@ -127,7 +131,9 @@ export function Shell() {
         onDrop={handleDrop}
       >
         <ObjectPalette />
-        <Scene />
+        <ErrorBoundary area="The 3D view">
+          <Scene />
+        </ErrorBoundary>
       </main>
 
       {/*

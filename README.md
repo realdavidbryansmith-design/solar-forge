@@ -110,7 +110,8 @@ src/
     tables.ts       NEC lookup tables, each with a verification status
     index.ts        the calculation engine; every result carries its citation
   engine/
-    solar.ts        sun position, row spacing, backtracking, PVWatts v5 yield
+    solar.ts        sun position, row spacing, backtracking; PVWatts v5 yield
+                    functions exist and are tested but are not yet surfaced
     loads.ts        appliance library, load presets, clear-sky insolation, sizing
     shading.ts      ray/sphere and ray/box occlusion, annual shading loss
     siteGeometry.ts bridges the design into the shading engine
@@ -131,6 +132,8 @@ export is the sensible bridge back into CAD and is the natural next feature.
 
 - DXF export and a generated single-line diagram
 - PDF permit package
+- Surface an annual production estimate (the PVWatts v5 functions are written
+  and tested but nothing displays a yield figure yet)
 - PVWatts / NSRDB integration for real weather-driven yield
 - Electrical (string-level) shading loss, not just geometric
 - Shading for ground-mount and tracker arrays

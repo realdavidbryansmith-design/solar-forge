@@ -59,6 +59,29 @@ export function correctedVoc(
   const checks: CodeCheck[] = []
   const beta = module.temp_coeff_voc_pct_per_c
 
+  if (module.voc_v === null) {
+    checks.push({
+      id: 'voc-no-dc-rating',
+      citation: 'NEC 690.7(A)',
+      title: 'Module has no DC voltage rating',
+      severity: 'unknown',
+      detail:
+        `${module.manufacturer} ${module.model} publishes no Voc. AC modules ` +
+        'with a factory-integrated microinverter have no DC circuit to size, ' +
+        'so the 690.7 correction does not apply to them.',
+      remedy:
+        'Size the AC branch circuit per the microinverter datasheet instead, ' +
+        'or choose a DC module.',
+    })
+    return {
+      corrected_voc_per_module_v: NaN,
+      voc_stc_v: NaN,
+      record_low_temp_c,
+      correction_factor: NaN,
+      checks,
+    }
+  }
+
   if (beta === null) {
     checks.push({
       id: 'voc-no-coefficient',
@@ -184,7 +207,7 @@ export function sizeString(input: StringSizingInput): StringSizingResult {
   const vmpCoeff =
     module.temp_coeff_voc_pct_per_c ?? module.temp_coeff_pmax_pct_per_c ?? null
   const vmpHot =
-    vmpCoeff === null
+    vmpCoeff === null || module.vmp_v === null
       ? NaN
       : module.vmp_v * (1 + (vmpCoeff / 100) * (max_cell_temp_c - 25))
 
@@ -264,6 +287,27 @@ export function maxCircuitCurrent(
   strings_in_parallel: number,
 ): MaxCircuitCurrentResult {
   const checks: CodeCheck[] = []
+
+  if (module.isc_a === null) {
+    checks.push({
+      id: 'isc-missing',
+      citation: 'NEC 690.8(A)',
+      title: 'Module has no Isc rating',
+      severity: 'unknown',
+      detail:
+        `${module.manufacturer} ${module.model} publishes no short-circuit ` +
+        'current, so the maximum circuit current cannot be calculated. ' +
+        'This is expected for AC modules, which have no DC circuit.',
+      remedy:
+        'Size the AC branch circuit from the microinverter datasheet, or ' +
+        'choose a module with published DC specifications.',
+    })
+    return {
+      max_circuit_current_a: NaN,
+      minimum_conductor_ampacity_a: NaN,
+      checks,
+    }
+  }
 
   const arrayIsc = module.isc_a * strings_in_parallel
   const maxCurrent = arrayIsc * 1.25
@@ -422,7 +466,14 @@ export function sizeConductor(
     },
   })
 
-  const ocpd = nextStandardOcpd(circuit_current_a)
+  /*
+    NEC 690.9(B): the OCPD is sized on the *continuous* value — 125% of the
+    690.8(A) maximum circuit current, i.e. 156.25% of Isc — not on the
+    maximum circuit current itself. Sizing on 125% of Isc gives a device
+    below the calculated circuit current, which both fails the rule and
+    nuisance-trips.
+  */
+  const ocpd = nextStandardOcpd(required_ampacity_a)
   if (ocpd === null) {
     checks.push({
       id: 'ocpd-too-large',
@@ -444,11 +495,16 @@ export function sizeConductor(
     const derated = base * tcf * fillAdj
     if (derated < required_ampacity_a) continue
 
-    // 110.14(C): the conductor may not be loaded beyond what its terminations
-    // are rated for, regardless of how good the insulation is.
+    /*
+      110.14(C): the conductor may not be loaded beyond what its terminations
+      are rated for, regardless of how good the insulation is. The terminals
+      carry the continuous load, so this is tested against the 125%-continuous
+      requirement — not the raw circuit current, which would let an 8 AWG with
+      a 50 A termination through on a 52 A continuous circuit.
+    */
     const terminationAmpacity = ampacityTable[termination_rating][size]
     if (terminationAmpacity === undefined) continue
-    if (terminationAmpacity < circuit_current_a) continue
+    if (terminationAmpacity < required_ampacity_a) continue
 
     // 240.4(D) small-conductor OCPD cap.
     const smallCap = SMALL_CONDUCTOR_OCPD_LIMIT[material]?.[size]
@@ -935,29 +991,65 @@ export function sizeChargeController(
   checks.push(...voc.checks)
 
   const stringVoc = voc.corrected_voc_per_module_v * modules_in_series
-  const arrayIsc = module.isc_a * strings_in_parallel
+  const arrayIsc = (module.isc_a ?? NaN) * strings_in_parallel
   const designCurrent = arrayIsc * 1.25 * 1.25
   const arrayW = module.pmax_w * modules_in_series * strings_in_parallel
   const controllerW = controller_max_charge_current_a * battery_nominal_v
 
-  const voltageOk = stringVoc <= controller_max_pv_voltage_v
+  /*
+    An unknown Voc must not render as a definite failure. NaN <= x is false, so
+    a missing temperature coefficient would otherwise print "NaN V exceeds the
+    limit" as a hard FAIL with "shorten the string to NaN modules" as a remedy.
+  */
+  const vocKnown = Number.isFinite(stringVoc)
+  const voltageOk = vocKnown && stringVoc <= controller_max_pv_voltage_v
   checks.push({
     id: 'cc-voltage',
     citation: 'NEC 690.7 / controller rating',
-    title: voltageOk
-      ? 'String voltage within controller limit'
-      : 'String voltage exceeds controller limit',
-    severity: voltageOk ? 'pass' : 'fail',
-    detail:
-      `${modules_in_series} modules x ${voc.corrected_voc_per_module_v.toFixed(2)} V ` +
-      `at ${record_low_temp_c} degC = ${stringVoc.toFixed(1)} V against a ` +
-      `${controller_max_pv_voltage_v} V controller limit.`,
+    title: !vocKnown
+      ? 'String voltage cannot be checked'
+      : voltageOk
+        ? 'String voltage within controller limit'
+        : 'String voltage exceeds controller limit',
+    severity: !vocKnown ? 'unknown' : voltageOk ? 'pass' : 'fail',
+    detail: !vocKnown
+      ? `The cold-temperature string voltage cannot be calculated for ` +
+        `${module.manufacturer} ${module.model}, so it cannot be checked against ` +
+        `the ${controller_max_pv_voltage_v} V controller limit.`
+      : `${modules_in_series} modules x ${voc.corrected_voc_per_module_v.toFixed(2)} V ` +
+        `at ${record_low_temp_c} degC = ${stringVoc.toFixed(1)} V against a ` +
+        `${controller_max_pv_voltage_v} V controller limit.`,
     remedy: voltageOk
       ? undefined
-      : `Shorten the string to ${Math.floor(controller_max_pv_voltage_v / voc.corrected_voc_per_module_v)} modules or fewer, or use a higher-voltage controller.`,
+      : !vocKnown
+        ? 'Supply the module Voc temperature coefficient so the cold-temperature voltage can be calculated.'
+        : `Shorten the string to ${Math.floor(controller_max_pv_voltage_v / voc.corrected_voc_per_module_v)} modules or fewer, or use a higher-voltage controller.`,
     values: {
-      string_voc_cold_v: Number(stringVoc.toFixed(1)),
+      string_voc_cold_v: vocKnown ? Number(stringVoc.toFixed(1)) : null,
       controller_limit_v: controller_max_pv_voltage_v,
+    },
+  })
+
+  // NEC 690.8: the controller must carry Isc x 1.25 x 1.25.
+  const currentHeadroomOk = controller_max_charge_current_a >= designCurrent
+  checks.push({
+    id: 'cc-current',
+    citation: 'NEC 690.8(A)/(B)',
+    title: currentHeadroomOk
+      ? 'Controller current rating is adequate'
+      : 'Controller current rating is exceeded',
+    severity: currentHeadroomOk ? 'pass' : 'fail',
+    detail:
+      `${module.isc_a} A Isc x ${strings_in_parallel} string(s) x 1.25 x 1.25 = ` +
+      `${designCurrent.toFixed(1)} A design current against a ` +
+      `${controller_max_charge_current_a} A controller rating.`,
+    remedy: currentHeadroomOk
+      ? undefined
+      : 'Use a controller with a higher charge-current rating, or split the ' +
+        'array across multiple controllers.',
+    values: {
+      design_current_a: Number(designCurrent.toFixed(1)),
+      controller_rating_a: controller_max_charge_current_a,
     },
   })
 

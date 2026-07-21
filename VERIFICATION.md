@@ -133,6 +133,22 @@ catalog as a point-in-time snapshot.
 
 ---
 
+## Inputs the tool will not guess
+
+Several checks depend on decisions only the designer can make. Where one is
+missing, the compliance panel reports **unknown** and says what to enter — it
+does not substitute a plausible default. An invented input that produces a
+confident PASS is more dangerous than a visible gap, because the arithmetic is
+displayed and looks authoritative.
+
+Currently required before the related check will run:
+
+| Input | Set on | Gates |
+|---|---|---|
+| Modules per string, strings in parallel | Electrical | Conductor sizing, charge controller |
+| DC run length, conductors in raceway | Electrical | Wire size and voltage drop |
+| Daily load (kWh) | Start wizard | Battery bank sizing |
+
 ## Engine assumptions
 
 - **String sizing** uses the manufacturer coefficient method (690.7(A)), with
@@ -145,17 +161,23 @@ catalog as a point-in-time snapshot.
   and fill derates, the 110.14(C) termination limit, the 240.4(D) small
   conductor cap, and a voltage-drop target (default 3%, a design goal, not a
   code requirement).
-- **220.87** uses 125% of the recorded 12-month peak. The engine refuses the
-  30-day recording alternative when the service has PV or peak shaving, because
-  the exception is not available there — which is most designs this tool
-  produces.
+- **220.87** uses 125% of the recorded 12-month peak. The engine *can* refuse
+  the 30-day recording alternative when the service has PV or peak shaving, but
+  the UI does not yet ask which method was used, so that check is not currently
+  reachable. If you used a 30-day recording on a service that already has solar,
+  the result here does not apply.
 - **Battery bank sizing** is design practice, not a code rule, and is labelled
   as such in the output.
-- **Production modelling** uses PVWatts v5 (Sandia cell temperature, PVWatts DC
-  power and inverter curves). It is a clear-sky geometric model driven by the
-  site latitude — **it does not use real weather data**. Expect it to differ
-  from PVsyst or a PVWatts run against TMY data. Use it for relative comparison
-  between design options, not for a production guarantee.
+- **There is no annual production figure yet.** PVWatts v5 functions (Sandia
+  cell temperature, DC power, inverter curve) are implemented and unit-tested in
+  `src/engine/solar.ts`, but nothing in the UI displays a yield number. The
+  clear-sky insolation used for *sizing* and *shading* is a geometric model
+  driven by latitude and tilt — **no weather data** — and will differ from
+  PVsyst or a PVWatts run against TMY.
+
+- **625.42 load management is not wired.** The engine supports sizing an EVSE on
+  its managed limit, but the UI does not ask for one, so every EVSE is sized on
+  nameplate. That is the conservative direction.
 
 ---
 

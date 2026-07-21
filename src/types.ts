@@ -26,11 +26,15 @@ export interface PvModule {
   pmax_w: number
   efficiency_pct: number | null
 
-  // STC electrical
-  vmp_v: number
-  imp_a: number
-  voc_v: number
-  isc_a: number
+  /*
+    STC electrical. Nullable on purpose: AC modules with a factory-integrated
+    microinverter publish AC data and no DC figures at all. The NEC engine must
+    report "unknown" for those, never calculate on a missing value.
+  */
+  vmp_v: number | null
+  imp_a: number | null
+  voc_v: number | null
+  isc_a: number | null
 
   /** Temperature coefficients, percent per degree C. Voc is negative. */
   temp_coeff_pmax_pct_per_c: number | null
@@ -435,6 +439,34 @@ export interface StringConfig {
   strings_in_parallel: number
 }
 
+/**
+ * DC circuit configuration.
+ *
+ * A module grid is a *layout*, not a circuit — how many modules sit in series
+ * and how many strings run in parallel is a wiring decision the designer makes.
+ * These are null until stated, and the engine reports "unknown" rather than
+ * inferring them from the physical grid.
+ */
+export interface CircuitConfig {
+  modules_per_string: number | null
+  strings_in_parallel: number | null
+  /** One-way DC home run length, feet. */
+  dc_run_ft: number | null
+  /** Current-carrying conductors sharing the raceway, for the fill derate. */
+  conductors_in_raceway: number | null
+  /** Terminal temperature rating of the equipment, degrees C (110.14(C)). */
+  termination_rating_c: 60 | 75 | 90
+}
+
+/** Measured or estimated site load, carried over from the sizing wizard. */
+export interface LoadProfile {
+  daily_kwh: number
+  peak_w: number
+  surge_w: number
+  /** Where the figure came from, so the UI can say how much to trust it. */
+  source: 'estimated' | 'itemised' | 'entered'
+}
+
 export interface Design {
   id: string
   name: string
@@ -456,6 +488,10 @@ export interface Design {
   system_type: SystemType[]
   /** Context objects for siting: buildings and trees. */
   site_objects: SiteObject[]
+  /** DC circuit wiring. Null fields mean "not yet specified". */
+  circuit: CircuitConfig
+  /** Load figure from the wizard, null until one is produced. */
+  load_profile: LoadProfile | null
 }
 
 export type SystemType =
