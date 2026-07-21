@@ -5,7 +5,7 @@
  * so nothing can drift out of sync with the design.
  */
 
-import type { RoofType, SystemType } from '../types'
+import type { RoofType, SiteObject, SiteObjectKind, SystemType } from '../types'
 import type { Option } from './controls'
 import { catalog } from '../catalog'
 import {
@@ -148,7 +148,171 @@ export function SitePanel() {
         </div>
         <Toggle label="Cast shadows" checked={showShadows} onChange={toggleShadows} />
       </Section>
+
+      <SiteObjectsSection />
     </PanelBody>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+/** Sensible starting dimensions per object type, in metres. */
+const OBJECT_PRESETS: Record<
+  SiteObjectKind,
+  { label: string; width: number; depth: number; height: number; pitch: number }
+> = {
+  house: { label: 'House', width: 12, depth: 8, height: 3, pitch: 25 },
+  barn: { label: 'Barn', width: 14, depth: 9, height: 5, pitch: 30 },
+  garage: { label: 'Garage', width: 7, depth: 6, height: 2.7, pitch: 20 },
+  shed: { label: 'Shed', width: 3, depth: 2.5, height: 2.2, pitch: 15 },
+  'tree-deciduous': { label: 'Tree (leafy)', width: 7, depth: 7, height: 9, pitch: 0 },
+  'tree-conifer': { label: 'Tree (conifer)', width: 4.5, depth: 4.5, height: 12, pitch: 0 },
+}
+
+/**
+ * Placement of buildings and trees.
+ *
+ * This is a shading tool as much as a drawing tool: put the neighbour's oak
+ * where it really is, then scrub the sun to see when it crosses the array.
+ */
+function SiteObjectsSection() {
+  const objects = useStore((s) => s.design.site_objects)
+  const addSiteObject = useStore((s) => s.addSiteObject)
+  const updateSiteObject = useStore((s) => s.updateSiteObject)
+  const removeSiteObject = useStore((s) => s.removeSiteObject)
+
+  const add = (kind: SiteObjectKind) => {
+    const p = OBJECT_PRESETS[kind]
+    const n = objects.filter((o) => o.kind === kind).length + 1
+    const obj: SiteObject = {
+      id: `obj-${kind}-${Date.now()}`,
+      kind,
+      name: `${p.label} ${n}`,
+      // Drop new objects clear of the default house footprint.
+      x: -8,
+      y: 6 + objects.length * 2,
+      rotation_deg: 0,
+      width_m: p.width,
+      depth_m: p.depth,
+      height_m: p.height,
+      roof_pitch_deg: p.pitch,
+    }
+    addSiteObject(obj)
+  }
+
+  return (
+    <Section
+      title="Site objects"
+      hint="Buildings and trees cast real shadows here. Place the ones that matter, then scrub the sun above to see when they shade the array — trees are usually the reason a location does not work."
+    >
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(OBJECT_PRESETS) as SiteObjectKind[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => add(k)}
+            className="rounded-full border border-ink-600 px-3 py-1 text-xs text-slate-300 hover:border-brand-500"
+          >
+            + {OBJECT_PRESETS[k].label}
+          </button>
+        ))}
+      </div>
+
+      {objects.length === 0 ? (
+        <p className="text-xs text-slate-500">
+          No site objects. Add the house, any outbuildings, and nearby trees.
+        </p>
+      ) : null}
+
+      {objects.map((o) => {
+        const isTree = o.kind.startsWith('tree-')
+        return (
+          <Collapse key={o.id} summary={`${o.name} — ${isTree ? 'tree' : 'building'}`}>
+            <div className="space-y-3">
+              <TextField
+                label="Name"
+                value={o.name}
+                onChange={(v) => updateSiteObject(o.id, { name: v })}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <NumberField
+                  label="East / west"
+                  unit="m"
+                  step={0.5}
+                  value={o.x}
+                  onChange={(v) => updateSiteObject(o.id, { x: v ?? 0 })}
+                  hint="+ is east"
+                />
+                <NumberField
+                  label="North / south"
+                  unit="m"
+                  step={0.5}
+                  value={o.y}
+                  onChange={(v) => updateSiteObject(o.id, { y: v ?? 0 })}
+                  hint="+ is north"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <NumberField
+                  label={isTree ? 'Canopy spread' : 'Width'}
+                  unit="m"
+                  min={0.5}
+                  step={0.5}
+                  value={o.width_m}
+                  onChange={(v) => updateSiteObject(o.id, { width_m: v ?? 1 })}
+                />
+                <NumberField
+                  label={isTree ? 'Total height' : 'Wall height'}
+                  unit="m"
+                  min={0.5}
+                  step={0.5}
+                  value={o.height_m}
+                  onChange={(v) => updateSiteObject(o.id, { height_m: v ?? 1 })}
+                />
+              </div>
+              {!isTree ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <NumberField
+                    label="Depth"
+                    unit="m"
+                    min={0.5}
+                    step={0.5}
+                    value={o.depth_m}
+                    onChange={(v) => updateSiteObject(o.id, { depth_m: v ?? 1 })}
+                  />
+                  <NumberField
+                    label="Roof pitch"
+                    unit="°"
+                    min={0}
+                    max={60}
+                    value={o.roof_pitch_deg}
+                    onChange={(v) => updateSiteObject(o.id, { roof_pitch_deg: v ?? 0 })}
+                    hint="0 = flat"
+                  />
+                </div>
+              ) : null}
+              {!isTree ? (
+                <NumberField
+                  label="Rotation"
+                  unit="°"
+                  min={0}
+                  max={360}
+                  value={o.rotation_deg}
+                  onChange={(v) => updateSiteObject(o.id, { rotation_deg: v ?? 0 })}
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => removeSiteObject(o.id)}
+                className="rounded-md border border-rose-800 px-2 py-1 text-xs text-rose-300"
+              >
+                Remove {o.name}
+              </button>
+            </div>
+          </Collapse>
+        )
+      })}
+    </Section>
   )
 }
 

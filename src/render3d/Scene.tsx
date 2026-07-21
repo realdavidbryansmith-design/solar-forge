@@ -15,6 +15,7 @@ import { ModuleArray } from './ModuleArray'
 import { GroundArray } from './GroundArray'
 import { SunLight, useIsNight } from './SunLight'
 import { Ground } from './Ground'
+import { SiteObjects } from './SiteObjects'
 
 function SceneContents() {
   const planes = useStore((s) => s.design.planes)
@@ -31,6 +32,7 @@ function SceneContents() {
 
       <SunLight />
       <Ground />
+      <SiteObjects />
 
       {planes.map((plane) => (
         <RoofPlane key={plane.id} plane={plane} />

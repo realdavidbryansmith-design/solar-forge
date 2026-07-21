@@ -372,6 +372,40 @@ export interface RoofPlane {
   eave_height_m: number
 }
 
+/**
+ * Things on the site that are not part of the PV system but govern where it
+ * can go: the house, outbuildings, and trees. Trees matter most — they are
+ * usually the reason a given roof plane or ground location does not work.
+ *
+ * Positions share the plan-view coordinate frame used by RoofPlane.polygon.
+ */
+export type SiteObjectKind =
+  | 'house'
+  | 'barn'
+  | 'shed'
+  | 'garage'
+  | 'tree-deciduous'
+  | 'tree-conifer'
+
+export interface SiteObject {
+  id: string
+  kind: SiteObjectKind
+  name: string
+  /** Plan position of the object's centre, metres. */
+  x: number
+  y: number
+  /** Rotation about vertical, degrees clockwise. Ignored for trees. */
+  rotation_deg: number
+  /** Buildings: footprint width. Trees: canopy diameter. */
+  width_m: number
+  /** Buildings: footprint depth. Unused for trees. */
+  depth_m: number
+  /** Buildings: wall height to the eave. Trees: total height. */
+  height_m: number
+  /** Buildings only: gable pitch, degrees. */
+  roof_pitch_deg: number
+}
+
 export type ArrayLayoutMode = 'portrait' | 'landscape'
 
 export interface PvArray {
@@ -420,6 +454,8 @@ export interface Design {
   /** Off-grid autonomy target; null for grid-tied designs. */
   autonomy_days: number | null
   system_type: SystemType[]
+  /** Context objects for siting: buildings and trees. */
+  site_objects: SiteObject[]
 }
 
 export type SystemType =

@@ -12,6 +12,7 @@ import type {
   PvArray,
   RoofPlane,
   SiteConditions,
+  SiteObject,
   StringConfig,
   SystemType,
 } from './types'
@@ -88,6 +89,16 @@ function defaultDesign(): Design {
     },
     autonomy_days: null,
     system_type: ['grid-tie'],
+    // A default house and a couple of trees, so a new design has something to
+    // site against rather than a bare field.
+    site_objects: [
+      // Walls only (pitch 0) and sized to the roof plane's footprint and eave
+      // height: the design's own RoofPlane provides the roof, so a gable here
+      // would render a second roof intersecting the first.
+      { id: 'obj-house', kind: 'house', name: 'House', x: 6, y: 3.5, rotation_deg: 0, width_m: 12, depth_m: 7, height_m: 3, roof_pitch_deg: 0 },
+      { id: 'obj-tree-1', kind: 'tree-deciduous', name: 'Oak', x: -6, y: 10, rotation_deg: 0, width_m: 7, depth_m: 7, height_m: 9, roof_pitch_deg: 0 },
+      { id: 'obj-tree-2', kind: 'tree-conifer', name: 'Pine', x: 20, y: 12, rotation_deg: 0, width_m: 4.5, depth_m: 4.5, height_m: 12, roof_pitch_deg: 0 },
+    ],
   }
 }
 
@@ -126,6 +137,10 @@ interface AppState {
   setBattery: (id: string | null, qty: number) => void
   setChargeController: (id: string | null, qty: number) => void
   setEvse: (ids: string[]) => void
+
+  addSiteObject: (obj: SiteObject) => void
+  updateSiteObject: (id: string, patch: Partial<SiteObject>) => void
+  removeSiteObject: (id: string) => void
 
   loadDesign: (d: Design) => void
   resetDesign: () => void
@@ -236,6 +251,29 @@ export const useStore = create<AppState>((set) => ({
     })),
 
   setEvse: (evse_ids) => set((s) => ({ design: touch({ ...s.design, evse_ids }) })),
+
+  addSiteObject: (obj) =>
+    set((s) => ({
+      design: touch({ ...s.design, site_objects: [...s.design.site_objects, obj] }),
+    })),
+
+  updateSiteObject: (id, patch) =>
+    set((s) => ({
+      design: touch({
+        ...s.design,
+        site_objects: s.design.site_objects.map((o) =>
+          o.id === id ? { ...o, ...patch } : o,
+        ),
+      }),
+    })),
+
+  removeSiteObject: (id) =>
+    set((s) => ({
+      design: touch({
+        ...s.design,
+        site_objects: s.design.site_objects.filter((o) => o.id !== id),
+      }),
+    })),
 
   loadDesign: (design) => set({ design }),
   resetDesign: () => set({ design: defaultDesign(), selectedArrayId: null }),
