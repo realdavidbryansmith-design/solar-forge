@@ -13,6 +13,7 @@ import type { PanelId } from '../store'
 import { useStore } from '../store'
 import { Scene } from '../render3d'
 import { ArrayPanel, ElectricalPanel, EvPanel, SitePanel, StoragePanel } from './panels'
+import { WizardPanel } from './WizardPanel'
 import { CompliancePanel } from './CompliancePanel'
 import { BomPanel } from './BomPanel'
 
@@ -25,6 +26,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
+  { id: 'wizard', label: 'Start', icon: '✨' },
   { id: 'site', label: 'Site', icon: '📍' },
   { id: 'array', label: 'Array', icon: '▦' },
   { id: 'electrical', label: 'Electrical', short: 'Elec', icon: '⚡' },
@@ -36,6 +38,8 @@ const TABS: Tab[] = [
 
 function ActivePanel({ id }: { id: PanelId }) {
   switch (id) {
+    case 'wizard':
+      return <WizardPanel />
     case 'site':
       return <SitePanel />
     case 'array':

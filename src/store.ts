@@ -18,6 +18,7 @@ import type {
 import { catalog } from './catalog'
 
 export type PanelId =
+  | 'wizard'
   | 'site'
   | 'array'
   | 'electrical'
@@ -134,7 +135,9 @@ const touch = (d: Design): Design => ({ ...d, modified: new Date().toISOString()
 
 export const useStore = create<AppState>((set) => ({
   design: defaultDesign(),
-  activePanel: 'site',
+  // Land on the guided sizing flow — most people arrive not knowing what they
+  // need, and an empty design with seven expert tabs is a dead end.
+  activePanel: 'wizard',
   selectedArrayId: null,
   sunHour: 12,
   sunDay: 172,
