@@ -8,9 +8,10 @@
  * the array.
  */
 
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import * as THREE from 'three'
 import type { SiteObject } from '../types'
+import type { ThreeEvent } from '@react-three/fiber'
 import { useStore } from '../store'
 
 const DEG = Math.PI / 180
@@ -202,18 +203,80 @@ function Tree({ obj }: { obj: SiteObject }) {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Makes a site object draggable across the ground.
+ *
+ * Pointer capture keeps the drag alive when the pointer leaves the object's
+ * own geometry, which it immediately does once the object starts moving.
+ * Works for touch as well as mouse, since these are pointer events.
+ */
+function Draggable({ id, children }: { id: string; children: React.ReactNode }) {
+  const updateSiteObject = useStore((s) => s.updateSiteObject)
+  const setDraggingObject = useStore((s) => s.setDraggingObject)
+  const dragging = useStore((s) => s.draggingObjectId)
+  const armedTool = useStore((s) => s.armedTool)
+
+  const onDown = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      // While a palette tool is armed the click belongs to placement.
+      if (armedTool) return
+      e.stopPropagation()
+      ;(e.target as Element).setPointerCapture?.(e.pointerId)
+      setDraggingObject(id)
+    },
+    [armedTool, id, setDraggingObject],
+  )
+
+  const onMove = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      if (dragging !== id) return
+      e.stopPropagation()
+      // e.point is on whatever was hit; project onto the ground instead so the
+      // object tracks the pointer rather than its own surface.
+      const origin = e.ray.origin
+      const dir = e.ray.direction
+      if (Math.abs(dir.y) < 1e-6) return
+      const t = -origin.y / dir.y
+      if (t <= 0) return
+      const x = origin.x + dir.x * t
+      const z = origin.z + dir.z * t
+      updateSiteObject(id, { x, y: -z })
+    },
+    [dragging, id, updateSiteObject],
+  )
+
+  const onUp = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      if (dragging !== id) return
+      e.stopPropagation()
+      ;(e.target as Element).releasePointerCapture?.(e.pointerId)
+      setDraggingObject(null)
+    },
+    [dragging, id, setDraggingObject],
+  )
+
+  return (
+    <group
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+    >
+      {children}
+    </group>
+  )
+}
+
 export function SiteObjects() {
   const objects = useStore((s) => s.design.site_objects)
 
   return (
     <group>
-      {objects.map((o) =>
-        o.kind.startsWith('tree-') ? (
-          <Tree key={o.id} obj={o} />
-        ) : (
-          <Building key={o.id} obj={o} />
-        ),
-      )}
+      {objects.map((o) => (
+        <Draggable key={o.id} id={o.id}>
+          {o.kind.startsWith('tree-') ? <Tree obj={o} /> : <Building obj={o} />}
+        </Draggable>
+      ))}
     </group>
   )
 }

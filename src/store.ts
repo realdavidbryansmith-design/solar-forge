@@ -13,6 +13,7 @@ import type {
   RoofPlane,
   SiteConditions,
   SiteObject,
+  SiteObjectKind,
   StringConfig,
   SystemType,
 } from './types'
@@ -112,7 +113,13 @@ interface AppState {
   sunDay: number
   showShadows: boolean
   showWiring: boolean
+  /** Palette tool waiting to be placed by a tap. Null when nothing is armed. */
+  armedTool: SiteObjectKind | null
+  /** Site object currently being dragged in the scene. */
+  draggingObjectId: string | null
 
+  setArmedTool: (kind: SiteObjectKind | null) => void
+  setDraggingObject: (id: string | null) => void
   setPanel: (p: PanelId) => void
   selectArray: (id: string | null) => void
   setSun: (day: number, hour: number) => void
@@ -158,6 +165,11 @@ export const useStore = create<AppState>((set) => ({
   sunDay: 172,
   showShadows: true,
   showWiring: false,
+  armedTool: null,
+  draggingObjectId: null,
+
+  setArmedTool: (armedTool) => set({ armedTool }),
+  setDraggingObject: (draggingObjectId) => set({ draggingObjectId }),
 
   setPanel: (p) => set({ activePanel: p }),
   selectArray: (id) => set({ selectedArrayId: id }),

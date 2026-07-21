@@ -6,7 +6,7 @@
  */
 
 import { Suspense } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Sky } from '@react-three/drei'
 import { catalog } from '../catalog'
 import { useStore } from '../store'
@@ -16,11 +16,25 @@ import { GroundArray } from './GroundArray'
 import { SunLight, useIsNight } from './SunLight'
 import { Ground } from './Ground'
 import { SiteObjects } from './SiteObjects'
+import { registerCamera } from './placement'
+import { makeSiteObject } from '../siteObjectPresets'
+
+/** Publishes the live camera so DOM drop handlers can project onto the ground. */
+function CameraBridge() {
+  const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
+  registerCamera(camera, size.width, size.height)
+  return null
+}
 
 function SceneContents() {
   const planes = useStore((s) => s.design.planes)
   const arrays = useStore((s) => s.design.arrays)
   const selectArray = useStore((s) => s.selectArray)
+  const armedTool = useStore((s) => s.armedTool)
+  const setArmedTool = useStore((s) => s.setArmedTool)
+  const addSiteObject = useStore((s) => s.addSiteObject)
+  const siteObjects = useStore((s) => s.design.site_objects)
   const night = useIsNight()
 
   return (
@@ -30,6 +44,7 @@ function SceneContents() {
 
       {!night && <Sky sunPosition={[0.4, 0.25, -1]} turbidity={6} rayleigh={1.2} />}
 
+      <CameraBridge />
       <SunLight />
       <Ground />
       <SiteObjects />
@@ -55,11 +70,24 @@ function SceneContents() {
         return <ModuleArray key={array.id} array={array} plane={plane} />
       })}
 
-      {/* Tapping empty space clears the selection. */}
+      {/*
+        Invisible ground catcher. With a palette tool armed it places the
+        object where you tapped; otherwise a tap on empty space just clears
+        the current selection.
+      */}
       <mesh
         position={[0, -0.05, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
-        onClick={() => selectArray(null)}
+        onClick={(e) => {
+          if (armedTool) {
+            e.stopPropagation()
+            const p = e.point
+            addSiteObject(makeSiteObject(armedTool, p.x, -p.z, siteObjects))
+            setArmedTool(null)
+            return
+          }
+          selectArray(null)
+        }}
       >
         <planeGeometry args={[400, 400]} />
         <meshBasicMaterial visible={false} />
@@ -69,6 +97,10 @@ function SceneContents() {
 }
 
 export function Scene() {
+  // Orbiting and dragging an object are the same gesture, so suspend the
+  // camera controls while a site object is being moved.
+  const dragging = useStore((s) => s.draggingObjectId)
+
   return (
     <Canvas
       shadows
@@ -87,6 +119,7 @@ export function Scene() {
       </Suspense>
       <OrbitControls
         makeDefault
+        enabled={dragging === null}
         enableDamping
         dampingFactor={0.1}
         minDistance={4}

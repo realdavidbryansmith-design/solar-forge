@@ -16,6 +16,10 @@ import { ArrayPanel, ElectricalPanel, EvPanel, SitePanel, StoragePanel } from '.
 import { WizardPanel } from './WizardPanel'
 import { CompliancePanel } from './CompliancePanel'
 import { BomPanel } from './BomPanel'
+import { ObjectPalette } from './ObjectPalette'
+import { DRAG_MIME, screenToGround } from '../render3d/placement'
+import { makeSiteObject } from '../siteObjectPresets'
+import type { SiteObjectKind } from '../types'
 
 interface Tab {
   id: PanelId
@@ -61,6 +65,19 @@ export function Shell() {
   const activePanel = useStore((s) => s.activePanel)
   const setPanel = useStore((s) => s.setPanel)
   const designName = useStore((s) => s.design.name)
+  const addSiteObject = useStore((s) => s.addSiteObject)
+
+  /** Drop from the palette: project the pointer onto the ground and place. */
+  const handleDrop = (e: React.DragEvent<HTMLElement>) => {
+    const kind = e.dataTransfer.getData(DRAG_MIME) as SiteObjectKind
+    if (!kind) return
+    e.preventDefault()
+    const rect = e.currentTarget.getBoundingClientRect()
+    const spot = screenToGround(e.clientX, e.clientY, rect)
+    if (!spot) return
+    const existing = useStore.getState().design.site_objects
+    addSiteObject(makeSiteObject(kind, spot.x, spot.y, existing))
+  }
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden md:flex-row">
@@ -99,7 +116,17 @@ export function Shell() {
       </aside>
 
       {/* ---- 3D view ---- */}
-      <main className="order-1 h-[45vh] w-full shrink-0 md:order-2 md:h-full md:min-w-0 md:flex-1">
+      <main
+        className="relative order-1 h-[45vh] w-full shrink-0 md:order-2 md:h-full md:min-w-0 md:flex-1"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes(DRAG_MIME)) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'copy'
+          }
+        }}
+        onDrop={handleDrop}
+      >
+        <ObjectPalette />
         <Scene />
       </main>
 
