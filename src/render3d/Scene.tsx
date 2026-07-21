@@ -8,9 +8,11 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Sky } from '@react-three/drei'
+import { catalog } from '../catalog'
 import { useStore } from '../store'
 import { RoofPlane } from './RoofPlane'
 import { ModuleArray } from './ModuleArray'
+import { GroundArray } from './GroundArray'
 import { SunLight, useIsNight } from './SunLight'
 import { Ground } from './Ground'
 
@@ -35,6 +37,17 @@ function SceneContents() {
       ))}
 
       {arrays.map((array) => {
+        const mount = catalog.mounts.find((m) => m.id === array.mount_id)
+        const module = catalog.modules.find((m) => m.id === array.module_id)
+
+        // Ground, pole and tracker mounts are free-standing structures with
+        // their own posts and row spacing — they do not lie on a roof plane.
+        if (mount && module && mount.kind !== 'roof') {
+          return (
+            <GroundArray key={array.id} array={array} module={module} mount={mount} />
+          )
+        }
+
         const plane = planes.find((p) => p.id === array.plane_id)
         if (!plane) return null
         return <ModuleArray key={array.id} array={array} plane={plane} />
@@ -58,7 +71,9 @@ export function Scene() {
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [16, 13, 20], fov: 45, near: 0.1, far: 500 }}
+      // Framed to take in both the building and a ground array standing clear
+      // of it to the south, rather than just the roof.
+      camera={{ position: [26, 18, 34], fov: 45, near: 0.1, far: 500 }}
       // ACES tone mapping crushes the midtones that roof and module materials
       // live in; lift the exposure so surfaces stay readable.
       gl={{ toneMappingExposure: 1.35 }}
@@ -76,7 +91,7 @@ export function Scene() {
         maxDistance={140}
         // Stop the camera dropping below grade.
         maxPolarAngle={Math.PI / 2 - 0.03}
-        target={[0, 2, 0]}
+        target={[6, 2, 4]}
       />
     </Canvas>
   )

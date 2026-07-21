@@ -1,5 +1,6 @@
 export { Scene } from './Scene'
 export { RoofPlane, planeFrame, planeSurface, planePolygonXZ } from './RoofPlane'
 export { ModuleArray } from './ModuleArray'
+export { GroundArray } from './GroundArray'
 export { SunLight, useIsNight } from './SunLight'
 export { Ground } from './Ground'

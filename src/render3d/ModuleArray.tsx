@@ -123,9 +123,11 @@ export function ModuleArray({ array, plane }: ModuleArrayProps) {
       {/* Thin slab: X across slope, Y up slope, Z out of the plane. */}
       <boxGeometry args={[width, height, 0.035]} />
       <meshStandardMaterial
-        color={selected ? '#1e3a8a' : '#0b1220'}
-        roughness={0.35}
-        metalness={0.15}
+        color={selected ? '#1e3a8a' : '#0a0f1c'}
+        // PV glass reads dark and only faintly glossy in real light. Low
+        // roughness here blew out to white under a grazing sun.
+        roughness={0.62}
+        metalness={0.04}
         emissive={selected ? '#1d4ed8' : '#000000'}
         emissiveIntensity={selected ? 0.25 : 0}
       />
