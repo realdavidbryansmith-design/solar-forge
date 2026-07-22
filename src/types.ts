@@ -467,6 +467,29 @@ export interface LoadProfile {
   source: 'estimated' | 'itemised' | 'entered'
 }
 
+/**
+ * A property photo laid flat on the ground as a tracing underlay.
+ *
+ * A top-down drone shot, scaled to real dimensions, lets the user trace their
+ * actual buildings and trees over it instead of guessing coordinates.
+ */
+export interface SiteImage {
+  /** Downscaled JPEG data URL. */
+  data_url: string
+  /** Image aspect ratio (width / height), to size the ground plane. */
+  aspect: number
+  /** Plan position of the image centre, metres. */
+  x: number
+  y: number
+  /** Real-world width the image spans, metres. Height follows from the aspect. */
+  width_m: number
+  /** Rotation about vertical, degrees, to line the image up with north. */
+  rotation_deg: number
+  /** 0..1 — turned down so traced objects stay visible over it. */
+  opacity: number
+  visible: boolean
+}
+
 export interface Design {
   id: string
   name: string
@@ -492,6 +515,8 @@ export interface Design {
   circuit: CircuitConfig
   /** Load figure from the wizard, null until one is produced. */
   load_profile: LoadProfile | null
+  /** Optional aerial photo underlay for tracing the property. */
+  site_image: SiteImage | null
 }
 
 export type SystemType =

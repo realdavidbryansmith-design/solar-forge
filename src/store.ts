@@ -11,6 +11,7 @@ import type {
   CircuitConfig,
   Design,
   LoadProfile,
+  SiteImage,
   PvArray,
   RoofPlane,
   SiteConditions,
@@ -104,6 +105,7 @@ function defaultDesign(): Design {
       termination_rating_c: 75,
     },
     load_profile: null,
+    site_image: null,
     site_objects: [
       // Walls only (pitch 0) and sized to the roof plane's footprint and eave
       // height: the design's own RoofPlane provides the roof, so a gable here
@@ -161,6 +163,8 @@ interface AppState {
   setEvse: (ids: string[]) => void
   updateCircuit: (patch: Partial<CircuitConfig>) => void
   setLoadProfile: (p: LoadProfile | null) => void
+  setSiteImage: (img: SiteImage | null) => void
+  updateSiteImage: (patch: Partial<SiteImage>) => void
 
   addSiteObject: (obj: SiteObject) => void
   updateSiteObject: (id: string, patch: Partial<SiteObject>) => void
@@ -302,6 +306,19 @@ export const useStore = create<AppState>((set) => ({
 
   setLoadProfile: (load_profile) =>
     set((s) => ({ design: touch({ ...s.design, load_profile }) })),
+
+  setSiteImage: (site_image) =>
+    set((s) => ({ design: touch({ ...s.design, site_image }) })),
+
+  updateSiteImage: (patch) =>
+    set((s) => ({
+      design: touch({
+        ...s.design,
+        site_image: s.design.site_image
+          ? { ...s.design.site_image, ...patch }
+          : null,
+      }),
+    })),
 
   addSiteObject: (obj) =>
     set((s) => ({

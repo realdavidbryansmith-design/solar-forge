@@ -16,6 +16,7 @@ import { GroundArray } from './GroundArray'
 import { SunLight, useIsNight } from './SunLight'
 import { Ground } from './Ground'
 import { SiteObjects } from './SiteObjects'
+import { GroundImage } from './GroundImage'
 import { registerCamera } from './placement'
 import { makeSiteObject } from '../siteObjectPresets'
 
@@ -47,6 +48,7 @@ function SceneContents() {
       <CameraBridge />
       <SunLight />
       <Ground />
+      <GroundImage />
       <SiteObjects />
 
       {planes.map((plane) => (

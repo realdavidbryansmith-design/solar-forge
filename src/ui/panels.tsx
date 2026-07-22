@@ -8,6 +8,7 @@
 import type { RoofType, SiteObject, SiteObjectKind, SystemType } from '../types'
 import type { Option } from './controls'
 import { ShadingSection } from './ShadingSection'
+import { PhotoSection } from './PhotoSection'
 import { catalog, hasDcSpecs } from '../catalog'
 import {
   arrayDcWatts,
@@ -149,6 +150,8 @@ export function SitePanel() {
         </div>
         <Toggle label="Cast shadows" checked={showShadows} onChange={toggleShadows} />
       </Section>
+
+      <PhotoSection />
 
       <SiteObjectsSection />
     </PanelBody>
