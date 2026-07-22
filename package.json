@@ -11,7 +11,9 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "verify": "npm run typecheck && npm run test && npm run build",
-    "deploy": "npm run verify && node scripts/deploy.mjs"
+    "deploy": "npm run verify && node scripts/deploy.mjs",
+    "build:native": "BASE_PATH=./ npm run build",
+    "cap:sync": "npm run build:native && cap sync"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -25,6 +27,10 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/ios": "^8.4.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",

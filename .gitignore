@@ -10,3 +10,7 @@ coverage
 # CI workflow parked here until the gh token has `workflow` scope.
 # See DEPLOY.md.
 .ci-pending/
+
+# Capacitor native shells — generated on the build machine via `npx cap add`.
+/ios/
+/android/
