@@ -179,6 +179,29 @@ describe('DXF geometry', () => {
     expect(dxf).toContain('units: feet')
   })
 
+  it('draws ground-mount arrays module by module', () => {
+    const gm = design()
+    gm.arrays[0].mount_id = 'unirac-gft'
+    const dxf = buildSiteDxf(gm, catalog.modules, { unit: 'meters' })
+    expect([...dxf.matchAll(/0\nLINE\n8\nPV-MODULES\n/g)].length).toBe(60)
+    expect(dxf).toContain('15 modules')
+  })
+
+  it('draws tracker arrays module by module', () => {
+    const tr = design()
+    tr.arrays[0].mount_id = 'nextracker-nx-horizon'
+    const dxf = buildSiteDxf(tr, catalog.modules, { unit: 'meters' })
+    expect([...dxf.matchAll(/0\nLINE\n8\nPV-MODULES\n/g)].length).toBe(60)
+  })
+
+  it('places a ground array clear of the roof footprint', () => {
+    const gm = design({ site_objects: [] })
+    gm.arrays[0].mount_id = 'unirac-gft'
+    const dxf = buildSiteDxf(gm, catalog.modules, { unit: 'meters' })
+    const ys = [...dxf.matchAll(/\n20\n(-?[0-9.]+)\n/g)].map((m) => Number(m[1]))
+    expect(Math.min(...ys)).toBeLessThan(0)
+  })
+
   it('handles an empty design without throwing', () => {
     const empty = design({ arrays: [], planes: [], site_objects: [] })
     const dxf = buildSiteDxf(empty, catalog.modules, { unit: 'feet' })

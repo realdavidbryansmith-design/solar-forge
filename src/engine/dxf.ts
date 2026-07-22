@@ -14,7 +14,8 @@
 import * as THREE from 'three'
 import type { Design, PvModule } from '../types'
 import { catalog } from '../catalog'
-import { roofModuleFrames } from './siteGeometry'
+import { roofModuleFrames, type ModuleFrame } from './siteGeometry'
+import { groundArrayLayout, siteFootprint } from './groundLayout'
 import { moduleCount } from '../store'
 
 export type DxfUnit = 'feet' | 'meters'
@@ -172,21 +173,36 @@ export function buildSiteDxf(
   }
 
   // --- arrays -------------------------------------------------------------
-  // The system summary counts every module; the drawing only lays out roof
-  // arrays module by module, since ground and tracker arrays are placed by a
-  // different code path not yet mirrored here.
+  // Every array is drawn to plan. Roof arrays use the roof-plane layout;
+  // ground and tracker arrays use the shared ground layout at its flat,
+  // widest-footprint orientation (the land-use footprint a site plan wants).
   let totalModules = 0
   for (const ar of design.arrays) totalModules += moduleCount(ar)
 
+  const footprint = siteFootprint(design.planes)
+
   for (const array of design.arrays) {
-    const plane = design.planes.find((p) => p.id === array.plane_id)
     const module = modules.find((m) => m.id === array.module_id)
     const mount = catalog.mounts.find((m) => m.id === array.mount_id)
-    if (!plane || !module) continue
-    // Only roof-mounted arrays are drawn to plan here.
-    if (mount && mount.kind !== 'roof') continue
+    if (!module) continue
 
-    const frames = roofModuleFrames(array, plane, module)
+    let frames: ModuleFrame[]
+    if (!mount || mount.kind === 'roof') {
+      const plane = design.planes.find((p) => p.id === array.plane_id)
+      if (!plane) continue
+      frames = roofModuleFrames(array, plane, module)
+    } else {
+      // sun = null gives the flat, plan-footprint orientation.
+      const layout = groundArrayLayout(
+        array,
+        mount,
+        module,
+        footprint,
+        design.site.latitude_deg,
+        null,
+      )
+      frames = layout?.modules ?? []
+    }
     if (frames.length === 0) continue
 
     let aMinX = Infinity

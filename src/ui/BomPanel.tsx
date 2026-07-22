@@ -79,9 +79,8 @@ function DxfExportSection() {
       </button>
       <p className="text-[11px] leading-relaxed text-slate-500">
         A plan view only — tilt and orientation are recorded per array but the drawing is
-        top-down. Roof-mounted arrays are drawn module by module; ground and tracker array
-        layout is not yet exported to the drawing (their module count is still in the
-        summary).
+        top-down. Roof, ground and tracker arrays are all drawn module by module; trackers
+        and fixed ground rows draw at their flat land-use footprint with real row spacing.
       </p>
     </Section>
   )
