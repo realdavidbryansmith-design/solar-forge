@@ -5,10 +5,87 @@
  * separately and reported, so the total is honest about what it excludes.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { catalog } from '../catalog'
 import { moduleCount, useStore } from '../store'
-import { EmptyState, PanelBody, ScrollX, Section, Stat, StatGrid, money } from './controls'
+import { buildSiteDxf, type DxfUnit } from '../engine/dxf'
+import {
+  EmptyState,
+  PanelBody,
+  ScrollX,
+  Section,
+  SelectField,
+  Stat,
+  StatGrid,
+  Toggle,
+  money,
+} from './controls'
+
+/** Trigger a browser download of a text file. */
+function downloadText(filename: string, mime: string, contents: string) {
+  const blob = new Blob([contents], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Revoke after the click has been handled.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+function DxfExportSection() {
+  const design = useStore((s) => s.design)
+  const [unit, setUnit] = useState<DxfUnit>('feet')
+  const [includeModules, setIncludeModules] = useState(true)
+
+  const hasGeometry =
+    design.arrays.length > 0 || design.planes.length > 0 || design.site_objects.length > 0
+
+  const exportDxf = () => {
+    const dxf = buildSiteDxf(design, catalog.modules, { unit, includeModules })
+    const safe = design.name.replace(/[^\w-]+/g, '_').replace(/^_|_$/g, '') || 'site'
+    downloadText(`${safe}-plan.dxf`, 'application/dxf', dxf)
+  }
+
+  return (
+    <Section
+      title="CAD export (DXF)"
+      hint="A plan-view drawing for AutoCAD or any CAD viewer — roof, arrays, modules, buildings and trees on named layers, with a north arrow and system summary. R12 format, opens anywhere."
+    >
+      <SelectField
+        label="Drawing units"
+        value={unit}
+        onChange={(v) => setUnit(v as DxfUnit)}
+        options={[
+          { value: 'feet', label: 'Feet' },
+          { value: 'meters', label: 'Metres' },
+        ]}
+      />
+      <Toggle
+        label="Draw individual module footprints"
+        checked={includeModules}
+        onChange={setIncludeModules}
+        hint="Off leaves just the array outlines — a lighter drawing for a busy sheet."
+      />
+      <button
+        type="button"
+        disabled={!hasGeometry}
+        onClick={exportDxf}
+        className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        Export DXF
+      </button>
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        A plan view only — tilt and orientation are recorded per array but the drawing is
+        top-down. Roof-mounted arrays are drawn module by module; ground and tracker array
+        layout is not yet exported to the drawing (their module count is still in the
+        summary).
+      </p>
+    </Section>
+  )
+}
 
 interface BomLine {
   category: string
@@ -170,6 +247,8 @@ export function BomPanel() {
           </p>
         ) : null}
       </Section>
+
+      <DxfExportSection />
 
       <Section
         title="Bill of materials"
