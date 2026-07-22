@@ -8,8 +8,10 @@
 
 import * as THREE from 'three'
 import type { Design, PvArray, PvModule, RoofPlane, SiteObject } from '../types'
-import { planeSurface } from '../render3d/RoofPlane'
-import type { Occluder, ShadedSurface, Vec3 } from './shading'
+import { planeSurface, planeFrame } from '../render3d/RoofPlane'
+import { catalog } from '../catalog'
+import { groundArrayLayout, siteFootprint } from './groundLayout'
+import type { BoxOccluder, Occluder, ShadedSurface, Vec3 } from './shading'
 
 const DEG = Math.PI / 180
 
@@ -156,32 +158,123 @@ export interface SiteShadingGeometry {
 }
 
 /**
+ * Surfaces and inter-row occluders for one ground, pole or tracker array.
+ *
+ * Fixed and pole arrays are laid out at their real tilt. Each *row* of tables
+ * becomes one box occluder so the front rows shade the rows behind them — the
+ * shading question that actually decides ground-array spacing. A module ignores
+ * its own row (`skip_occluder_id`): its sample points sit inside that box, and a
+ * south-tilted panel presents only a thin edge to its east-west neighbours, so
+ * modelling within-row blocking would invent a summer loss that is not there.
+ * The remaining loss is the real north-south inter-row shading, worst in winter.
+ *
+ * Trackers are laid out flat and marked `tracking`, so the irradiance weighting
+ * treats them as sun-facing. They get NO inter-row occluders: backtracking is
+ * designed to keep the rows out of each other's shadow, so modelling the tables
+ * as solid blockers would invent a loss the mount exists to prevent. External
+ * objects (trees, buildings) still shade them.
+ */
+function groundArrayShading(
+  array: PvArray,
+  module: PvModule,
+  mount: (typeof catalog.mounts)[number],
+  footprint: ReturnType<typeof siteFootprint>,
+  latitude_deg: number,
+): SiteShadingGeometry {
+  const layout = groundArrayLayout(array, mount, module, footprint, latitude_deg, null)
+  if (!layout) return { surfaces: [], occluders: [] }
+
+  const isTracker = mount.kind === 'tracker'
+  const tilt = array.tilt_deg ?? mount.tilt_max_deg ?? 30
+  const azimuth = array.azimuth_deg ?? 180
+
+  // Axes in plan: `back` runs down the rows (north–south for a south array),
+  // `across` runs along a row. A row is one bucket of `back` projection.
+  const back = planeFrame(azimuth, 0).downhill
+  const across = planeFrame(azimuth, 0).right
+  const backProj = (p: THREE.Vector3) => p.x * back.x + p.z * back.z
+  const rowBucket = (p: THREE.Vector3) => Math.round(backProj(p) / layout.rowPitch)
+
+  // Group tables into rows and give each row a single occluder box.
+  const occluders: BoxOccluder[] = []
+  const rowIdById = new Map<number, string>()
+  if (!isTracker) {
+    const rows = new Map<number, THREE.Vector3[]>()
+    for (const t of layout.tables) {
+      const b = rowBucket(t.origin)
+      ;(rows.get(b) ?? rows.set(b, []).get(b)!).push(t.origin)
+    }
+    for (const [bucket, origins] of rows) {
+      const acrossVals = origins.map((o) => o.x * across.x + o.z * across.z)
+      const halfAcross = (Math.max(...acrossVals) - Math.min(...acrossVals)) / 2 + layout.tableW / 2
+      const cx = origins.reduce((s, o) => s + o.x, 0) / origins.length
+      const cz = origins.reduce((s, o) => s + o.z, 0) / origins.length
+      const id = `${array.id}:row:${bucket}`
+      rowIdById.set(bucket, id)
+      occluders.push({
+        kind: 'box',
+        id,
+        label: `${array.name} row`,
+        center: { x: cx, y: origins[0].y, z: cz },
+        half: {
+          x: halfAcross,
+          y: Math.max(0.05, (layout.tableH / 2) * Math.sin(tilt * DEG)),
+          z: Math.max(0.05, (layout.tableH / 2) * Math.cos(tilt * DEG)),
+        },
+        rotation_deg: azimuth - 180,
+      })
+    }
+  }
+
+  const surfaces: ShadedSurface[] = layout.modules.map((frame, i) => ({
+    id: `${array.id}:${frame.row}:${frame.col}:${i}`,
+    samples: sampleModuleFace(frame),
+    tilt_deg: isTracker ? 0 : tilt,
+    azimuth_deg: azimuth,
+    tracking: isTracker || undefined,
+    skip_occluder_id: isTracker ? undefined : rowIdById.get(rowBucket(frame.position)),
+  }))
+
+  return { surfaces, occluders }
+}
+
+/**
  * Build everything the shading engine needs from a design.
  *
- * Only roof-mounted arrays are sampled today; ground and tracker arrays are
- * laid out by a different code path and are not yet wired in.
+ * Roof arrays are sampled on their plane; ground, pole and tracker arrays are
+ * laid out by the shared ground layout and sampled there. Inter-row shading is
+ * modelled for fixed ground arrays; trackers rely on backtracking.
  */
 export function buildShadingGeometry(
   design: Design,
   modules: readonly PvModule[],
 ): SiteShadingGeometry {
   const surfaces: ShadedSurface[] = []
+  const arrayOccluders: Occluder[] = []
+  const footprint = siteFootprint(design.planes)
 
   for (const array of design.arrays) {
-    const plane = design.planes.find((p) => p.id === array.plane_id)
     const module = modules.find((m) => m.id === array.module_id)
-    if (!plane || !module) continue
+    if (!module) continue
+    const mount = catalog.mounts.find((m) => m.id === array.mount_id)
 
-    const tilt = array.tilt_deg ?? plane.tilt_deg
-    const azimuth = array.azimuth_deg ?? plane.azimuth_deg
-
-    for (const frame of roofModuleFrames(array, plane, module)) {
-      surfaces.push({
-        id: `${array.id}:${frame.row}:${frame.col}`,
-        samples: sampleModuleFace(frame),
-        tilt_deg: tilt,
-        azimuth_deg: azimuth,
-      })
+    if (!mount || mount.kind === 'roof') {
+      const plane = design.planes.find((p) => p.id === array.plane_id)
+      if (!plane) continue
+      const tilt = array.tilt_deg ?? plane.tilt_deg
+      const azimuth = array.azimuth_deg ?? plane.azimuth_deg
+      for (const frame of roofModuleFrames(array, plane, module)) {
+        surfaces.push({
+          id: `${array.id}:${frame.row}:${frame.col}`,
+          samples: sampleModuleFace(frame),
+          tilt_deg: tilt,
+          azimuth_deg: azimuth,
+        })
+      }
+    } else {
+      const g = groundArrayShading(array, module, mount, footprint, design.site.latitude_deg)
+      surfaces.push(...g.surfaces)
+      arrayOccluders.push(...g.occluders)
     }
   }
 
@@ -191,8 +284,14 @@ export function buildShadingGeometry(
     module sat inside its own obstruction and read as permanently shaded.
     Cross-shading between separate roof planes would need per-surface
     exclusion of the module's own plane; not modelled today.
+
+    Ground-array tables ARE occluders (inter-row shading), but each module
+    skips its own table via skip_occluder_id — see groundArrayShading.
   */
-  const occluders: Occluder[] = design.site_objects.flatMap(siteObjectToOccluders)
+  const occluders: Occluder[] = [
+    ...design.site_objects.flatMap(siteObjectToOccluders),
+    ...arrayOccluders,
+  ]
 
   return { surfaces, occluders }
 }

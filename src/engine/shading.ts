@@ -127,13 +127,24 @@ function rayHits(origin: Vec3, dir: Vec3, o: Occluder): boolean {
   return o.kind === 'sphere' ? rayHitsSphere(origin, dir, o) : rayHitsBox(origin, dir, o)
 }
 
-/** First occluder blocking the ray, or null if the sun is visible. */
+/**
+ * First occluder blocking the ray, or null if the sun is visible.
+ *
+ * `skipId` lets a surface ignore one obstruction — the table it is mounted on.
+ * Without it a ground module's own table box encloses its sample points and it
+ * reads as permanently shaded, the same trap that keeps roof planes out of the
+ * occluder set.
+ */
 export function firstBlocker(
   origin: Vec3,
   dir: Vec3,
   occluders: readonly Occluder[],
+  skipId?: string,
 ): Occluder | null {
-  for (const o of occluders) if (rayHits(origin, dir, o)) return o
+  for (const o of occluders) {
+    if (o.id === skipId) continue
+    if (rayHits(origin, dir, o)) return o
+  }
   return null
 }
 
@@ -165,6 +176,19 @@ export interface ShadedSurface {
   samples: Vec3[]
   tilt_deg: number
   azimuth_deg: number
+  /**
+   * A single-axis or dual-axis tracker's face turns to follow the sun, so its
+   * fixed `tilt_deg`/`azimuth_deg` do not describe the plane-of-array the light
+   * actually meets. When set, the irradiance weighting treats the face as
+   * pointed at the sun. This affects which hours count toward the loss, not the
+   * ray geometry — the sample points stay where they were placed.
+   */
+  tracking?: boolean
+  /**
+   * One occluder id this surface is immune to — the table it stands on. See
+   * `firstBlocker`.
+   */
+  skip_occluder_id?: string
 }
 
 export interface ShadingInput {
@@ -258,7 +282,11 @@ export function computeShading(input: ShadingInput): ShadingResult {
       const dir = sunVector(sun)
 
       for (const surf of surfaces) {
-        const irr = clearSkyIrradiance(sun, surf.tilt_deg, surf.azimuth_deg)
+        // A tracker faces the sun; weight it by the plane-of-array a sun-facing
+        // panel would see, not by its (meaningless) parked tilt.
+        const tilt = surf.tracking ? Math.max(0, 90 - sun.altitude_deg) : surf.tilt_deg
+        const azimuth = surf.tracking ? sun.azimuth_deg : surf.azimuth_deg
+        const irr = clearSkyIrradiance(sun, tilt, azimuth)
         if (irr.poa_wm2 <= 0) continue
 
         const available = irr.poa_wm2 * stepH * daysInMonth
@@ -275,7 +303,7 @@ export function computeShading(input: ShadingInput): ShadingResult {
         const blameHere = new Map<string, number>()
         for (const point of surf.samples) {
           raysCast++
-          const hitBy = firstBlocker(point, dir, occluders)
+          const hitBy = firstBlocker(point, dir, occluders, surf.skip_occluder_id)
           if (hitBy) {
             blocked++
             blameHere.set(hitBy.id, (blameHere.get(hitBy.id) ?? 0) + 1)

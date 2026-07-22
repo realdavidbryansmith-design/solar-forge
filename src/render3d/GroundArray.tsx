@@ -33,9 +33,18 @@ export function GroundArray({ array, module, mount }: GroundArrayProps) {
   const selectedArrayId = useStore((s) => s.selectedArrayId)
   const selectArray = useStore((s) => s.selectArray)
 
+  const shading = useStore((s) => s.shading)
+
   const selected = selectedArrayId === array.id
 
   const footprint = useMemo(() => siteFootprint(planes), [planes])
+
+  /** Per-module annual loss, keyed the same way siteGeometry builds surface ids. */
+  const lossById = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of shading?.per_surface ?? []) m.set(p.id, p.loss_pct)
+    return m
+  }, [shading])
 
   // The tracker follows the current sun; fixed/pole mounts ignore it.
   const built = useMemo(() => {
@@ -57,6 +66,20 @@ export function GroundArray({ array, module, mount }: GroundArrayProps) {
       )
       mm.instanceMatrix.needsUpdate = true
       mm.computeBoundingSphere()
+
+      // Tint each module by its own measured shading loss — the same ramp the
+      // roof arrays use, keyed the same way siteGeometry ids the surfaces.
+      if (!selected) {
+        const c = new THREE.Color()
+        built.modules.forEach((f, i) => {
+          const loss = lossById.get(`${array.id}:${f.row}:${f.col}:${i}`) ?? 0
+          if (loss < 1) c.set('#0a0f1c')
+          else if (loss < 15) c.set('#0a0f1c').lerp(new THREE.Color('#f59e0b'), loss / 15)
+          else c.set('#f59e0b').lerp(new THREE.Color('#e11d48'), Math.min(1, (loss - 15) / 25))
+          mm.setColorAt(i, c)
+        })
+        if (mm.instanceColor) mm.instanceColor.needsUpdate = true
+      }
     }
 
     const pm = postRef.current
@@ -77,7 +100,7 @@ export function GroundArray({ array, module, mount }: GroundArrayProps) {
       tm.instanceMatrix.needsUpdate = true
       tm.computeBoundingSphere()
     }
-  }, [built])
+  }, [built, lossById, array.id, selected])
 
   if (!built) return null
 
@@ -99,7 +122,8 @@ export function GroundArray({ array, module, mount }: GroundArrayProps) {
       >
         <boxGeometry args={[modW, modH, MODULE_THICK_M]} />
         <meshStandardMaterial
-          color={selected ? '#1e3a8a' : '#0a0f1c'}
+          // White base so the per-instance loss tint shows true; selection wins.
+          color={selected ? '#1e3a8a' : '#ffffff'}
           // PV glass reads dark and only faintly glossy in real light. Low
           // roughness here blew out to white under a grazing sun.
           roughness={0.62}
