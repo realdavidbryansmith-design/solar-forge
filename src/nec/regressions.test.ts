@@ -10,6 +10,7 @@ import {
   maxCircuitCurrent,
   sizeChargeController,
   sizeConductor,
+  sizeString,
   correctedVoc,
 } from './index'
 import { catalog, hasDcSpecs } from '../catalog'
@@ -92,6 +93,40 @@ describe('charge controller (review findings 2, 7, 12)', () => {
     // The bug printed "Shorten the string to NaN modules or fewer".
     expect(voltage.remedy ?? '').not.toContain('NaN')
     expect(voltage.detail).not.toContain('NaN V against')
+  })
+})
+
+describe('AC module never yields a NaN card (review 2, bug A)', () => {
+  it('reports unknown, not a NaN FAIL, for the controller current check', () => {
+    const r = sizeChargeController({
+      module: acModule,
+      modules_in_series: 3,
+      strings_in_parallel: 1,
+      record_low_temp_c: -22,
+      controller_max_pv_voltage_v: 150,
+      controller_max_charge_current_a: 45,
+      battery_nominal_v: 48,
+    })
+    const current = r.checks.find((c) => c.id === 'cc-current')!
+    expect(current.severity).toBe('unknown')
+    expect(current.detail).not.toContain('NaN')
+    expect(current.detail).not.toContain('null A')
+  })
+})
+
+describe('AC module emits no green DC card (review 2, bug C)', () => {
+  it('sizeString does not push a passing voltage-ceiling card', () => {
+    const inverter = catalog.inverters.find((i) => i.category === 'string')!
+    const r = sizeString({
+      module: acModule,
+      inverter,
+      record_low_temp_c: -22,
+      max_cell_temp_c: 60,
+      occupancy: 'dwelling',
+    })
+    // Only the "no DC rating" unknown check, no green pass.
+    expect(r.checks.every((c) => c.severity !== 'pass')).toBe(true)
+    expect(r.checks.some((c) => c.severity === 'unknown')).toBe(true)
   })
 })
 

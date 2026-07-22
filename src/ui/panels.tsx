@@ -8,7 +8,7 @@
 import type { RoofType, SiteObject, SiteObjectKind, SystemType } from '../types'
 import type { Option } from './controls'
 import { ShadingSection } from './ShadingSection'
-import { catalog } from '../catalog'
+import { catalog, hasDcSpecs } from '../catalog'
 import {
   arrayDcWatts,
   makeModulePositions,
@@ -352,7 +352,9 @@ export function ArrayPanel() {
 
   const moduleOptions: Option[] = catalog.modules.map((m) => ({
     value: m.id,
-    label: `${m.manufacturer} ${m.model} — ${m.pmax_w} W`,
+    // Mark AC modules — the DC string/conductor checks do not apply to them,
+    // and the Code tab will say so rather than silently pass.
+    label: `${m.manufacturer} ${m.model} — ${m.pmax_w} W${hasDcSpecs(m) ? '' : ' (AC module)'}`,
   }))
   const mountOptions: Option[] = catalog.mounts.map((m) => ({
     value: m.id,

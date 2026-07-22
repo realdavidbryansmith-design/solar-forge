@@ -176,6 +176,20 @@ export function sizeString(input: StringSizingInput): StringSizingResult {
   const voc = correctedVoc(module, record_low_temp_c)
   checks.push(...voc.checks)
 
+  // An AC module has no DC circuit to size. Stop here rather than emitting a
+  // green "voltage ceiling" card, which reads as a pass on a module the DC
+  // string rules do not apply to at all.
+  if (module.voc_v === null) {
+    return {
+      max_modules_per_string: 0,
+      min_modules_per_string: 0,
+      corrected_voc_per_module_v: NaN,
+      vmp_hot_per_module_v: NaN,
+      voltage_limit_v: NaN,
+      checks,
+    }
+  }
+
   const occupancyLimit = occupancy === 'dwelling' ? 600 : 1000
   const inverterLimit = inverter.max_dc_input_voltage_v ?? Infinity
   const limit = Math.min(occupancyLimit, inverterLimit, module.max_system_voltage_v ?? Infinity)
@@ -1031,24 +1045,34 @@ export function sizeChargeController(
   })
 
   // NEC 690.8: the controller must carry Isc x 1.25 x 1.25.
-  const currentHeadroomOk = controller_max_charge_current_a >= designCurrent
+  // Guard the null-Isc case (AC modules) the same way the voltage check does —
+  // an unguarded NaN here rendered as a hard FAIL reading "null A Isc ... NaN A".
+  const currentKnown = Number.isFinite(designCurrent)
+  const currentHeadroomOk = currentKnown && controller_max_charge_current_a >= designCurrent
   checks.push({
     id: 'cc-current',
     citation: 'NEC 690.8(A)/(B)',
-    title: currentHeadroomOk
-      ? 'Controller current rating is adequate'
-      : 'Controller current rating is exceeded',
-    severity: currentHeadroomOk ? 'pass' : 'fail',
-    detail:
-      `${module.isc_a} A Isc x ${strings_in_parallel} string(s) x 1.25 x 1.25 = ` +
-      `${designCurrent.toFixed(1)} A design current against a ` +
-      `${controller_max_charge_current_a} A controller rating.`,
+    title: !currentKnown
+      ? 'Controller current cannot be checked'
+      : currentHeadroomOk
+        ? 'Controller current rating is adequate'
+        : 'Controller current rating is exceeded',
+    severity: !currentKnown ? 'unknown' : currentHeadroomOk ? 'pass' : 'fail',
+    detail: !currentKnown
+      ? `${module.manufacturer} ${module.model} publishes no Isc, so the design ` +
+        `current cannot be checked against the ${controller_max_charge_current_a} A ` +
+        'controller rating. This is expected for AC modules.'
+      : `${module.isc_a} A Isc x ${strings_in_parallel} string(s) x 1.25 x 1.25 = ` +
+        `${designCurrent.toFixed(1)} A design current against a ` +
+        `${controller_max_charge_current_a} A controller rating.`,
     remedy: currentHeadroomOk
       ? undefined
-      : 'Use a controller with a higher charge-current rating, or split the ' +
-        'array across multiple controllers.',
+      : !currentKnown
+        ? 'Choose a module with published DC specifications.'
+        : 'Use a controller with a higher charge-current rating, or split the ' +
+          'array across multiple controllers.',
     values: {
-      design_current_a: Number(designCurrent.toFixed(1)),
+      design_current_a: currentKnown ? Number(designCurrent.toFixed(1)) : null,
       controller_rating_a: controller_max_charge_current_a,
     },
   })

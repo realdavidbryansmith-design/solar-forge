@@ -202,10 +202,10 @@ export const useStore = create<AppState>((set) => ({
       // `min`/`max` on a number input are advisory only — the browser will
       // happily hand back 999. Clamp here so no downstream trig sees it.
       const next = { ...s.design.site, ...patch }
-      if (typeof next.latitude_deg === 'number') {
+      if (Number.isFinite(next.latitude_deg)) {
         next.latitude_deg = Math.max(-89.9, Math.min(89.9, next.latitude_deg))
       }
-      if (typeof next.longitude_deg === 'number') {
+      if (Number.isFinite(next.longitude_deg)) {
         next.longitude_deg = Math.max(-180, Math.min(180, next.longitude_deg))
       }
       return { design: touch({ ...s.design, site: next }) }
