@@ -316,18 +316,20 @@ export function CompliancePanel() {
             ),
           ],
         })
-        return groups
+        // Do NOT return — the battery and later checks below still need to run.
+        // An early return here silently dropped them.
+      } else {
+        const r = sizeChargeController({
+          module,
+          modules_in_series: c.modules_per_string,
+          strings_in_parallel: c.strings_in_parallel,
+          record_low_temp_c: design.site.record_low_temp_c,
+          controller_max_pv_voltage_v: cc.max_pv_input_voltage_v,
+          controller_max_charge_current_a: cc.max_charge_current_a,
+          battery_nominal_v: 48,
+        })
+        groups.push({ title: 'Charge controller', checks: r.checks })
       }
-      const r = sizeChargeController({
-        module,
-        modules_in_series: c.modules_per_string,
-        strings_in_parallel: c.strings_in_parallel,
-        record_low_temp_c: design.site.record_low_temp_c,
-        controller_max_pv_voltage_v: cc.max_pv_input_voltage_v,
-        controller_max_charge_current_a: cc.max_charge_current_a,
-        battery_nominal_v: 48,
-      })
-      groups.push({ title: 'Charge controller', checks: r.checks })
     }
 
     if (design.autonomy_days !== null && design.autonomy_days > 0) {
