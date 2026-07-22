@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/solar-forge/sw.js', { scope: '/solar-forge/' })})}
